@@ -1,6 +1,7 @@
 NUGET
   remote: https://www.nuget.org/api/v2
   specs:
+    FParsec (1.0.2)
     linqtotwitter (3.1.2)
       Microsoft.Bcl (>= 1.1.9)
       Microsoft.Bcl.Build (>= 1.0.14)
