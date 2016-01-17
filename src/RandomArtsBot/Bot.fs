@@ -75,16 +75,15 @@ module Processor =
         return! loop botname nextID
     }
 
-[<AbstractClass>]
 type Bot (botname) =
     let logger = LogManager.GetLogger botname
 
     member this.Start () =
         logInfof logger "[%s] starting..." botname
 
-//        Storage.readLastMentionID ()
-//        |> Processor.loop 
-//        |> Async.Start
+        //Storage.readLastMentionID ()
+        Processor.loop botname None
+        |> Async.Start
 
         logInfof logger "[%s] started" botname
 

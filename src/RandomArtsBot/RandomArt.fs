@@ -256,7 +256,6 @@ module RandomArt =
         let path  = 
             Path.Combine(
                 Path.GetTempPath(), 
-                Path.GetTempFileName(),
-                ".png")
+                Path.GetTempFileName() + ".png")
         image.Save(path)
         path

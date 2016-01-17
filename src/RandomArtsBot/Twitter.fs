@@ -95,32 +95,36 @@ module Twitter =
         delay.Add safetyBuffer
 
     let pullMentions (sinceID : SinceID Option) =
-        let mentions = 
-            match sinceID with
-            | None ->
-                query { 
-                    for tweet in context.Status do 
-                    where (tweet.Type = StatusType.Mentions)
-                    select tweet 
-                }
-            | Some(id) ->
-                query { 
-                    for tweet in context.Status do 
-                    where (tweet.Type = StatusType.Mentions && tweet.SinceID = id)
-                    where (tweet.StatusID <> id)
-                    select tweet 
-                }
-            |> Seq.toList
+        try
+            let mentions = 
+                match sinceID with
+                | None ->
+                    query { 
+                        for tweet in context.Status do 
+                        where (tweet.Type = StatusType.Mentions)
+                        select tweet 
+                    }
+                | Some(id) ->
+                    query { 
+                        for tweet in context.Status do 
+                        where (tweet.Type = StatusType.Mentions && tweet.SinceID = id)
+                        where (tweet.StatusID <> id)
+                        select tweet 
+                    }
+                |> Seq.toList
 
-        let wait = delayUntilNextCall context
-        logInfof "pullMentions : next call in %A" wait
+            let wait = delayUntilNextCall context
+            logInfof "pullMentions : next call in %A" wait
 
-        let updatedSinceID =
-            match mentions with
-            | []    -> sinceID
-            | hd::_ -> Some hd.StatusID
-                                                                  
-        mentions, updatedSinceID, wait
+            let updatedSinceID =
+                match mentions with
+                | []    -> sinceID
+                | hd::_ -> Some hd.StatusID
+
+            mentions, updatedSinceID, wait
+        with 
+        | ex -> 
+            reraise()
 
     let trimToTweet (msg : string) =
         if msg.Length > 140 
