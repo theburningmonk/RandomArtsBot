@@ -47,7 +47,7 @@ module Processor =
         match text with
         | Help -> 
             return createResp 
-                    "Thank you for your interest, plz syntax reference here" 
+                    "Thank you for your interest, plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
                     []
         | Mention ->
             return createResp "Thank you for your attention :-)" []
@@ -55,8 +55,10 @@ module Processor =
             let path = RandomArt.drawImage expr
             let! mediaId = Twitter.uploadImage path
             return createResp "here you go" [ mediaId ]
-        | InvalidQuery err ->
-            return createResp err []
+        | InvalidQuery _ ->
+            return createResp 
+                    "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
+                    []
     }
         
     let rec loop botname sinceId = async {
