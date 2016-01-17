@@ -175,8 +175,8 @@ module RandomArt =
         let skipStringCI s     = skipStringCI s .>> ws
         let stringCIReturn s r = stringCIReturn s r .>> ws
 
-        let openParen  = pstring "("
-        let closeParen = pstring ")"
+        let openParen  = skipStringCI "("
+        let closeParen = skipStringCI ")"
 
         let (expr : Parser<Expr>), exprImpl = createParserForwardedToRef()
 
@@ -185,9 +185,8 @@ module RandomArt =
         let constant  = stringCIReturn "const" Constant
 
         let unaryOp symbol op =
-            pipe4
-                openParen (skipStringCI symbol) expr closeParen
-                (fun _ _ e _ -> op e)
+            openParen >>. (skipStringCI symbol) >>. expr .>> closeParen |>> op
+
         let binaryOp symbol op =
             pipe5
                 openParen (skipStringCI symbol) expr expr closeParen
@@ -220,15 +219,29 @@ module RandomArt =
         let lvl = ternaryOp "lvl" Level
         let mix = ternaryOp "mix" Mix
 
+        // NOTE : this is rather inefficient with lots of backtracking
         do exprImpl := 
             choice [ 
-                variableX; variableY; constant 
-                sin; cos; tan
-                sqr; sqrt
-                mod'; well; tent
-                max; min; avg
-                add; sub; prod; div
-                lvl; mix
+                attempt variableX 
+                attempt variableY
+                attempt constant 
+                attempt sin
+                attempt cos
+                attempt tan
+                attempt sqr
+                attempt sqrt
+                attempt mod' 
+                attempt well
+                attempt tent
+                attempt max
+                attempt min
+                attempt avg
+                attempt add
+                attempt sub
+                attempt prod
+                attempt div
+                attempt lvl
+                attempt mix
             ]
 
         let tryParseExpr text = 
