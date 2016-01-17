@@ -4,49 +4,43 @@
 #I "../../bin"
 
 (**
-RandomArtsBot
+Random Arts Twitter Bot
 ======================
 
-Documentation
+This project implements a Twitter bot ([@RandomArtsBot][twitter]) that generates 
+random art using your message. To test it out, send a message to the [bot][twitter]
+using the following syntax.
 
-<div class="row">
-  <div class="span1"></div>
-  <div class="span6">
-    <div class="well well-small" id="nuget">
-      The RandomArtsBot library can be <a href="https://nuget.org/packages/RandomArtsBot">installed from NuGet</a>:
-      <pre>PM> Install-Package RandomArtsBot</pre>
-    </div>
-  </div>
-  <div class="span1"></div>
-</div>
+An `expression` is made up of `functions` and `primitives`.
 
-Example
--------
+__Primitives__ : `x`, `y`, `const`
 
-This example demonstrates using a function defined in this sample library.
+__Functions__ :
 
-*)
-#r "RandomArtsBot.dll"
-open RandomArtsBot
+ * `+` e.g. `(+ x y)`
+ * `-` e.g. `(- x y)`
+ * `*` e.g. `(* x y)`
+ * `/` e.g. `(/ x y)`
+ * `sin` e.g. `(sin x)`
+ * `cos` e.g. `(cos x)`
+ * `tan` e.g. `(tan x)`
+ * `sqr` e.g. `(sqr x)`
+ * `sqrt` e.g. `(sqrt x)`
+ * `mod` e.g. `(mod x const)`
+ * `well` e.g. `(well x)`
+ * `tent` e.g. `(tent x)`
+ * `max` e.g. `(max x)`
+ * `min` e.g. `(min x)`
+ * `avg` e.g. `(avg x)`
+ * `lvl` e.g. `(lvl x y const)`
+ * `mix` e.g. `(mix x y const)`
 
-printfn "hello = %i" <| Library.hello 0
+You can mix & match different functions together, for example:
 
-(**
-Some more info
+* `(+ (tan x) (cos y))`
+* `(+ (mod (* (sin y) const) (mod x y)) (well (+ (sin x) (sin y))))`
+* `(mod (avg x y) (mix (well y) (tent (cos (+ x const))) const))`
 
-Samples & documentation
------------------------
-
-The library comes with comprehensible documentation. 
-It can include tutorials automatically generated from `*.fsx` files in [the content folder][content]. 
-The API reference is automatically generated from Markdown comments in the library implementation.
-
- * [Tutorial](tutorial.html) contains a further explanation of this sample library.
-
- * [API Reference](reference/index.html) contains automatically generated documentation for all types, modules
-   and functions in the library. This includes additional brief samples on using most of the
-   functions.
- 
 Contributing and copyright
 --------------------------
 
@@ -59,9 +53,10 @@ The library is available under Public Domain license, which allows modification 
 redistribution for both commercial and non-commercial purposes. For more information see the 
 [License file][license] in the GitHub repository. 
 
-  [content]: https://github.com/fsprojects/RandomArtsBot/tree/master/docs/content
-  [gh]: https://github.com/fsprojects/RandomArtsBot
-  [issues]: https://github.com/fsprojects/RandomArtsBot/issues
-  [readme]: https://github.com/fsprojects/RandomArtsBot/blob/master/README.md
-  [license]: https://github.com/fsprojects/RandomArtsBot/blob/master/LICENSE.txt
+  [twitter]: https://twitter.com/randomartsbot
+  [content]: https://github.com/theburningmonk/RandomArtsBot/tree/master/docs/content
+  [gh]: https://github.com/theburningmonk/RandomArtsBot
+  [issues]: https://github.com/theburningmonk/RandomArtsBot/issues
+  [readme]: https://github.com/theburningmonk/RandomArtsBot/blob/master/README.md
+  [license]: https://github.com/theburningmonk/RandomArtsBot/blob/master/LICENSE.txt
 *)
