@@ -172,14 +172,8 @@ module RandomArt =
         let ws = spaces     // eats any whitespace
 
         // shadow functions to make them ignore whitespace
-        let pstring s          = pstring s .>> ws
-        let pstringCI s        = pstringCI s .>> ws
-        let skipString s       = skipString s .>> ws
         let skipStringCI s     = skipStringCI s .>> ws
-        let stringReturn s r   = stringReturn s r .>> ws
         let stringCIReturn s r = stringCIReturn s r .>> ws
-        let pfloat             = pfloat .>> ws
-        let pint32             = pint32 .>> ws
 
         let openParen  = pstring "("
         let closeParen = pstring ")"
@@ -192,15 +186,15 @@ module RandomArt =
 
         let unaryOp symbol op =
             pipe4
-                openParen (pstringCI symbol) expr closeParen
+                openParen (skipStringCI symbol) expr closeParen
                 (fun _ _ e _ -> op e)
         let binaryOp symbol op =
             pipe5
-                openParen (pstringCI symbol) expr expr closeParen
+                openParen (skipStringCI symbol) expr expr closeParen
                 (fun _ _ e1 e2 _ -> op (e1, e2))
         let ternaryOp symbol op =
             pipe6
-                openParen (pstringCI symbol) expr expr expr closeParen
+                openParen (skipStringCI symbol) expr expr expr closeParen
                 (fun _ _ e1 e2 e3 _ -> op (e1, e2, e3))
 
         let sin = unaryOp "sin" Sin

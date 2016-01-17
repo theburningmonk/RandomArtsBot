@@ -6,73 +6,73 @@ module Processor =
     open System
     open System.Text.RegularExpressions
     open LinqToTwitter
+    open Twitter
+    open RandomArt
 
     let logger = LogManager.GetLogger "Processor"
     let logInfof fmt = logInfof logger fmt
 
     let normalize botname (text : string) = 
-        text.ToLower().Replace(botname, "")
+        text.ToLower().Replace(botname, "").Trim()
 
-//    let processArguments (args:PLACE*MEASURE*TIMEFRAME) (recipient,statusID) =
-//        async {
-//            logger.Info "Processing arguments"
-//            let result = createChart args
-//            let mediaID = 
-//                result.Chart 
-//                |> Option.map (fun chart -> 
-//                    Twitter.mediaUploadAgent.PostAndReply (fun channel -> chart, channel))
-//
-//            { RecipientName = recipient
-//              StatusID = statusID
-//              Message = result.Description
-//              MediaID = mediaID }
-//            |> Twitter.responsesAgent.Post }
+    let probablyQuery (text : string) =
+        (text.Contains "(" 
+        || text.Contains "x"
+        || text.Contains "y"
+        || text.Contains "const")
 
-    let respondTo (status : Status) =        
+    let (|Query|InvalidQuery|Help|Mention|) text =
+        if probablyQuery text then 
+            match parse text with
+            | Choice1Of2 expr -> Query expr
+            | Choice2Of2 err  -> InvalidQuery err
+        elif text = "help" then Help
+        else Mention
+
+    let createResponse botname (status : Status) = async {
         let recipient = status.User.ScreenNameResponse
-        let statusID  = status.StatusID
-        let text      = status.Text
+        let statusId  = status.StatusID
+        let text      = normalize botname status.Text
 
-        logInfof "Responding to [%s] [%i] [%s]" recipient statusID text
+        logInfof "Responding to [%s] [%d] [%s]" recipient statusId text
 
-//        match text with
-//        | Mention -> 
-//            { RecipientName = recipient
-//              StatusID = statusID
-//              Message = "thanks for the attention!"
-//              MediaID = None }
-//            |> Twitter.responsesAgent.Post
-//        | Query ->
-//            let arguments = 
-//                text
-//                |> removeBotHandle
-//                |> extractArguments
-//        
-//            match arguments with
-//            | Fail(msg) ->
-//                { RecipientName = recipient
-//                  StatusID = statusID
-//                  Message = "failed to parse your request: " + msg
-//                  MediaID = None }
-//                |> Twitter.responsesAgent.Post
-//            | OK(args) -> 
-//                processArguments args (recipient,statusID)
-//                |> Async.Start
-//                |> ignore
+        let createResp msg mediaIds =
+            {
+                RecipientName = recipient
+                StatusID      = statusId
+                Message       = msg
+                MediaIDs      = mediaIds
+            }
+
+        match text with
+        | Help -> 
+            return createResp 
+                    "Thank you for your interest, plz syntax reference here" 
+                    []
+        | Mention ->
+            return createResp "Thank you for your attention :-)" []
+        | Query expr -> 
+            let path = RandomArt.drawImage expr
+            let! mediaId = Twitter.uploadImage path
+            return createResp "here you go" [ mediaId ]
+        | InvalidQuery err ->
+            return createResp err []
+    }
         
-    let rec loop sinceId = async {
-        logInfof "Checking for new mentions"
+    let rec loop botname sinceId = async {
+        logInfof "[%s] Checking for new mentions" botname
         let mentions, nextID, delay = Twitter.pullMentions sinceId
 
 //        nextID 
 //        |> Option.iter (Storage.updateLastMentionID)
-        
-        mentions 
-        |> List.iter respondTo
+      
+        for mention in mentions do
+            let! response = createResponse botname mention
+            do! Twitter.send response
 
         do! Async.Sleep (int delay.TotalMilliseconds)
 
-        return! loop (nextID) 
+        return! loop botname nextID
     }
 
 [<AbstractClass>]
