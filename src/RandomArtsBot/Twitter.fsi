@@ -15,6 +15,12 @@ module Twitter =
             MediaIDs      : MediaID list
         }
 
+    type Tweet =
+        {
+            Message     : string
+            MediaIDs    : MediaID list
+        }
+
     val pullMentions : StatusID option -> (Status list * StatusID option * TimeSpan)
 
     /// Uploads an image to Twitter by local path. Returns an Image ID that can
@@ -23,3 +29,6 @@ module Twitter =
 
     /// Sends a response
     val send : Response -> Async<unit>
+
+    /// Tweets a new tweet
+    val tweet : Tweet -> Async<unit>

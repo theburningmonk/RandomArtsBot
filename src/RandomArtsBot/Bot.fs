@@ -60,6 +60,16 @@ module Processor =
                     "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
                     []
     }
+
+    let createTweet () = async {
+        let expr = RandomArt.genExpr 5
+        let path = RandomArt.drawImage expr
+        let! mediaId = Twitter.uploadImage path
+        return {
+                  Message  = expr.ToString()
+                  MediaIDs = [ mediaId  ]
+               }
+    }
         
     let rec loop botname sinceId = async {
         logInfof "[%s] Checking for new mentions" botname
@@ -72,6 +82,10 @@ module Processor =
         for mention in mentions do
             let! response = createResponse botname mention
             do! Twitter.send response
+
+        if mentions = [] && next() <= 0.5 then
+            let! tweet = createTweet ()
+            do! Twitter.tweet tweet
 
         do! Async.Sleep (int delay.TotalMilliseconds)
 

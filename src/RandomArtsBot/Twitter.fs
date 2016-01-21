@@ -121,9 +121,14 @@ module Twitter =
 
         mentions, updatedSinceID, wait
 
-    let trimToTweet (msg : string) =
-        if msg.Length > 140 
-        then msg.Substring(0,134) + " [...]"
+    let trimToTweet (mediaIds : MediaID list) (msg : string) =
+        let maxLen =
+            match mediaIds with
+            | [] -> 140
+            | _  -> 116
+
+        if msg.Length > maxLen 
+        then msg.Substring(0, maxLen-6) + " [...]"
         else msg
 
     type Response = 
@@ -134,39 +139,37 @@ module Twitter =
             MediaIDs      : MediaID list
         }
 
+    type Tweet =
+        {
+            Message     : string
+            MediaIDs    : MediaID list
+        }
+
     type Agent<'T> = MailboxProcessor<'T>
 
-    let responsesAgent = Agent<Response>.Start(fun inbox ->
-        let send (resp : Response) = async {
+    type TwitterAction =
+        | SendReply   of Response
+        | Tweet       of Tweet
+        | UploadImage of filepath:string * AsyncReplyChannel<MediaID>
+
+    let twitterAgent = Agent<TwitterAction>.Start(fun inbox ->
+        let reply (resp : Response) = async {
             let message = 
                 sprintf "@%s %s" resp.RecipientName resp.Message
-                |> trimToTweet
+                |> trimToTweet resp.MediaIDs
 
             do! context.ReplyAsync(resp.StatusID, message, resp.MediaIDs) 
                 |> Async.AwaitTask
                 |> Async.Ignore
         }
 
-        let rec loop () = async {
-            let! response = inbox.Receive ()
-
-            logInfof "Posting response: %s" response.Message
-            do! send response
-
-            logCurrentLimits ()
-
-            if (context.RateLimitRemaining = 0)
-            then
-                logInfof "Send reply: waiting for limit reset"
-                let wait = resetDelay context
-                let ms   = wait.TotalMilliseconds |> int
-                do! Async.Sleep ms
-            return! loop () 
+        let tweet (tweet : Tweet) = async {
+            let msg = trimToTweet tweet.MediaIDs tweet.Message
+            do! context.TweetAsync(msg, tweet.MediaIDs)
+                |> Async.AwaitTask
+                |> Async.Ignore
         }
 
-        loop ())
-
-    let mediaUploadAgent = Agent<string * AsyncReplyChannel<uint64>>.Start(fun inbox ->
         let upload (path : string) = async {
             logInfof "Uploading image from %s" path
 
@@ -192,20 +195,26 @@ module Twitter =
         }
 
         let rec loop () = async {
-            let! (path, replyChannel) = inbox.Receive ()
+            let! action = inbox.Receive ()
 
-            logInfof "Uploading image [%s]..." path
-            let! mediaID = upload path
-            replyChannel.Reply mediaID
-            logInfof "Uploaded image [%s]" path
+            match action with
+            | SendReply resp ->
+                logInfof "Posting reply to [@%s] : %s" resp.RecipientName resp.Message
+                do! reply resp
+            | Tweet t ->
+                logInfof "Sending new tweet : %s" t.Message
+                do! tweet t
+            | UploadImage (path, replyChannel) ->
+                let! mediaID = upload path
+                replyChannel.Reply mediaID
 
             logCurrentLimits ()
 
             if (context.RateLimitRemaining = 0)
             then
-                logInfof "Media upload: waiting for limit reset"
+                logInfof "Rate limit reached, waiting for limit reset..."
                 let wait = resetDelay context
-                let ms = wait.TotalMilliseconds |> int
+                let ms   = wait.TotalMilliseconds |> int
                 do! Async.Sleep ms
             return! loop () 
         }
@@ -214,10 +223,14 @@ module Twitter =
 
     let uploadImage path = async {
         let! mediaId = 
-            mediaUploadAgent.PostAndAsyncReply (fun reply -> path, reply)
+            twitterAgent.PostAndAsyncReply (fun reply -> UploadImage(path, reply))
         return mediaId
     }
 
     let send response = async {
-        responsesAgent.Post response    
+        twitterAgent.Post (SendReply response)   
+    }
+
+    let tweet t = async {
+        twitterAgent.Post (Tweet t)
     }

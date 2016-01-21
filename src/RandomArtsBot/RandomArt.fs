@@ -1,35 +1,63 @@
 ﻿namespace RandomArtsBot
 
 module RandomArt =
+    open System
+
     type Expr =
-       | VariableX
-       | VariableY
-       | Constant
+        | VariableX
+        | VariableY
+        | Constant
 
-       | Add      of Expr * Expr
-       | Subtract of Expr * Expr
-       | Product  of Expr * Expr
-       | Divide   of Expr * Expr
+        | Add      of Expr * Expr
+        | Subtract of Expr * Expr
+        | Product  of Expr * Expr
+        | Divide   of Expr * Expr
 
-       | Max      of Expr * Expr
-       | Min      of Expr * Expr
-       | Average  of Expr * Expr
+        | Max      of Expr * Expr
+        | Min      of Expr * Expr
+        | Average  of Expr * Expr
 
-       | Mod      of Expr * Expr
-       | Well     of Expr
-       | Tent     of Expr
+        | Mod      of Expr * Expr
+        | Well     of Expr
+        | Tent     of Expr
 
-       | Sin of Expr
-       | Cos of Expr
-       | Tan of Expr
+        | Sin of Expr
+        | Cos of Expr
+        | Tan of Expr
 
-       | Sqr  of Expr
-       | Sqrt of Expr
+        | Sqr  of Expr
+        | Sqrt of Expr
 
-       | Level of Expr * Expr * Expr
-       | Mix   of Expr * Expr * Expr
+        | Level of Expr * Expr * Expr
+        | Mix   of Expr * Expr * Expr
 
-    let random  = System.Random()
+        override x.ToString() =
+            match x with
+            | VariableX -> "x"
+            | VariableY -> "y"
+            | Constant  -> "const"
+
+            | Add      (e1, e2) -> sprintf "(+ %O %O)" e1 e2
+            | Subtract (e1, e2) -> sprintf "(- %O %O)" e1 e2
+            | Product  (e1, e2) -> sprintf "(* %O %O)" e1 e2
+            | Divide   (e1, e2) -> sprintf "(/ %O %O)" e1 e2
+            | Max      (e1, e2) -> sprintf "(max %O %O)" e1 e2
+            | Min      (e1, e2) -> sprintf "(min %O %O)" e1 e2
+            | Average  (e1, e2) -> sprintf "(avg %O %O)" e1 e2
+            | Mod      (e1, e2) -> sprintf "(mod %O %O)" e1 e2
+
+            | Well e -> sprintf "(well %O)" e
+            | Tent e -> sprintf "(tent %O)" e
+            | Sin  e -> sprintf "(sin %O)" e
+            | Cos  e -> sprintf "(cos %O)" e
+            | Tan  e -> sprintf "(tan %O)" e
+            | Sqr  e -> sprintf "(sqr %O)" e
+            | Sqrt e -> sprintf "(sqrt %O)" e
+
+            | Level (e1, e2, e3) -> sprintf "(lvl %O %O %O)" e1 e2 e3 
+            | Mix   (e1, e2, e3) -> sprintf "(mix %O %O %O)" e1 e2 e3
+
+    let random  = System.Random(int DateTime.UtcNow.Ticks)
     let next () = random.NextDouble()
 
     let average (c1, c2, w) =
@@ -145,6 +173,38 @@ module RandomArt =
        )
 
        image
+
+    let rec genExpr n =
+        if n <= 0 || next () < 0.01 then
+            let terminals = [VariableX; VariableY;Constant]
+            terminals.[random.Next(terminals.Length)]
+        else
+            let operators = [
+                fun () -> Add ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Subtract ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Product  ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Divide   ( genExpr (n-1), genExpr (n-1) )
+
+                fun () -> Max ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Min ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Average ( genExpr (n-1), genExpr (n-1) )
+
+                fun () -> Mod  ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Well ( genExpr (n-1) )
+                fun () -> Tent ( genExpr (n-1) )
+
+                fun () -> Sin ( genExpr (n-1) )
+                fun () -> Cos ( genExpr (n-1) )
+                fun () -> Tan ( genExpr (n-1) )
+
+                fun () -> Sqr  ( genExpr (n-1) )
+                fun () -> Sqrt ( genExpr (n-1) )
+
+                fun () -> Level ( genExpr (n-1), genExpr (n-1), genExpr (n-1) )
+                fun () -> Mix   ( genExpr (n-1), genExpr (n-1), genExpr (n-1) )
+            ]
+
+            operators.[random.Next(operators.Length)]()
 
     [<AutoOpen>]
     module Parsers =
