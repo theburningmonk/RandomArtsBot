@@ -9,7 +9,6 @@ module Twitter =
     open LinqToTwitter
     open NLog
 
-    type SinceID  = uint64
     type StatusID = uint64
     type MediaID  = uint64
 
@@ -94,37 +93,33 @@ module Twitter =
                 nextReset - DateTime.UtcNow
         delay.Add safetyBuffer
 
-    let pullMentions (sinceID : SinceID Option) =
-        try
-            let mentions = 
-                match sinceID with
-                | None ->
-                    query { 
-                        for tweet in context.Status do 
-                        where (tweet.Type = StatusType.Mentions)
-                        select tweet 
-                    }
-                | Some(id) ->
-                    query { 
-                        for tweet in context.Status do 
-                        where (tweet.Type = StatusType.Mentions && tweet.SinceID = id)
-                        where (tweet.StatusID <> id)
-                        select tweet 
-                    }
-                |> Seq.toList
+    let pullMentions (sinceID : StatusID Option) =
+        let mentions = 
+            match sinceID with
+            | None ->
+                query { 
+                    for tweet in context.Status do 
+                    where (tweet.Type = StatusType.Mentions)
+                    select tweet 
+                }
+            | Some(id) ->
+                query { 
+                    for tweet in context.Status do 
+                    where (tweet.Type = StatusType.Mentions && tweet.SinceID = id)
+                    where (tweet.StatusID <> id)
+                    select tweet 
+                }
+            |> Seq.toList
 
-            let wait = delayUntilNextCall context
-            logInfof "pullMentions : next call in %A" wait
+        let wait = delayUntilNextCall context
+        logInfof "pullMentions : next call in %A" wait
 
-            let updatedSinceID =
-                match mentions with
-                | []    -> sinceID
-                | hd::_ -> Some hd.StatusID
+        let updatedSinceID =
+            match mentions with
+            | []    -> sinceID
+            | hd::_ -> Some hd.StatusID
 
-            mentions, updatedSinceID, wait
-        with 
-        | ex -> 
-            reraise()
+        mentions, updatedSinceID, wait
 
     let trimToTweet (msg : string) =
         if msg.Length > 140 

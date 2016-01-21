@@ -63,10 +63,11 @@ module Processor =
         
     let rec loop botname sinceId = async {
         logInfof "[%s] Checking for new mentions" botname
-        let mentions, nextID, delay = Twitter.pullMentions sinceId
-
-//        nextID 
-//        |> Option.iter (Storage.updateLastMentionID)
+        let mentions, nextId, delay = Twitter.pullMentions sinceId
+        
+        match nextId with
+        | Some id -> do! State.updateLastMention botname id
+        | _ -> ()
       
         for mention in mentions do
             let! response = createResponse botname mention
@@ -74,20 +75,19 @@ module Processor =
 
         do! Async.Sleep (int delay.TotalMilliseconds)
 
-        return! loop botname nextID
+        return! loop botname nextId
     }
 
 type Bot (botname) =
     let logger = LogManager.GetLogger botname
 
-    member this.Start () =
+    member __.Start () =
         logInfof logger "[%s] starting..." botname
 
-        //Storage.readLastMentionID ()
-        Processor.loop botname None
-        |> Async.Start
+        let lastMention = State.lastMention botname |> Async.RunSynchronously
+        Processor.loop botname lastMention |> Async.Start
 
         logInfof logger "[%s] started" botname
 
-    member this.Stop () =
+    member __.Stop () =
         logInfof logger "[%s] stopped" botname
