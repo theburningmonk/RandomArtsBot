@@ -146,10 +146,11 @@ module RandomArt =
     open System.IO
 
     let rgb (r, g, b) =
-       let r = max 0 (min 255 (int (128.0 * (r + 1.0))))
-       let g = max 0 (min 255 (int (128.0 * (g + 1.0))))
-       let b = max 0 (min 255 (int (128.0 * (b + 1.0))))
-       r, g, b
+        let r = max 0 (min 255 (int (128.0 * (r + 1.0))))
+        let g = max 0 (min 255 (int (128.0 * (g + 1.0))))
+        let b = max 0 (min 255 (int (128.0 * (b + 1.0))))
+
+        r, g, b
  
     let width, height = 512, 384
 
@@ -173,37 +174,105 @@ module RandomArt =
 
        image
 
+    type WeightedOption<'a> = { Option : 'a; Weight : int }
+
+    let pickFrom (random : Random) (options : WeightedOption<'a> list) =
+        let sums = 
+            options
+            |> List.map (fun o -> o.Weight)
+            |> List.scan (+) 0
+            |> Seq.skip 1
+            |> Seq.toArray
+
+        let pick = random.Next(Seq.last sums)
+
+        let idx = sums |> Array.findIndex ((<) pick)
+        options |> Seq.item idx
+
     let rec genExpr random n =
         if n <= 0 || next random < 0.01 then
             let terminals = [| VariableX; VariableY; Constant |]
             terminals.[ random.Next(terminals.Length) ]
         else
-            let operators = [
-                fun () -> Add ( genExpr random (n-1), genExpr random (n-1) )
-                fun () -> Subtract ( genExpr random (n-1), genExpr random (n-1) )
-                fun () -> Product  ( genExpr random (n-1), genExpr random (n-1) )
-                fun () -> Divide   ( genExpr random (n-1), genExpr random (n-1) )
+            let options = [
+                { 
+                    Option = fun () -> Add ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 30
+                }
+                { 
+                    Option = fun () -> Subtract ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 10
+                }
+                { 
+                    Option = fun () -> Product ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 10
+                }
+                { 
+                    Option = fun () -> Divide ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 10
+                }
 
-                fun () -> Max ( genExpr random (n-1), genExpr random (n-1) )
-                fun () -> Min ( genExpr random (n-1), genExpr random (n-1) )
-                fun () -> Average ( genExpr random (n-1), genExpr random (n-1) )
+                { 
+                    Option = fun () -> Max ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 3
+                }
+                {
+                    Option = fun () -> Min ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 5 
+                }
+                { 
+                    Option = fun () -> Average ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 10
+                }
 
-                fun () -> Mod  ( genExpr random (n-1), genExpr random (n-1) )
-                fun () -> Well ( genExpr random (n-1) )
-                fun () -> Tent ( genExpr random (n-1) )
-
-                fun () -> Sin ( genExpr random (n-1) )
-                fun () -> Cos ( genExpr random (n-1) )
-                fun () -> Tan ( genExpr random (n-1) )
-
-                fun () -> Sqr  ( genExpr random (n-1) )
-                fun () -> Sqrt ( genExpr random (n-1) )
-
-                fun () -> Level ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
-                fun () -> Mix   ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
+                { 
+                    Option = fun () -> Mod ( genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 50
+                }
+                { 
+                    Option = fun () -> Well ( genExpr random (n-1) )
+                    Weight = 5
+                }
+                { 
+                    Option = fun () -> Tent ( genExpr random (n-1) )
+                    Weight = 5
+                }
+                
+                { 
+                    Option = fun () -> Sin ( genExpr random (n-1) )
+                    Weight = 25
+                }
+                { 
+                    Option = fun () -> Cos ( genExpr random (n-1) )
+                    Weight = 25
+                }
+                { 
+                    Option = fun () -> Tan ( genExpr random (n-1) )
+                    Weight = 25
+                }
+                
+                { 
+                    Option = fun () -> Sqr ( genExpr random (n-1) )
+                    Weight = 2
+                }
+                { 
+                    Option = fun () -> Sqrt ( genExpr random (n-1) )
+                    Weight = 2 
+                }
+                
+                { 
+                    Option = fun () -> 
+                        Level ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 5
+                }
+                { 
+                    Option = fun () -> 
+                        Mix ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
+                    Weight = 5
+                }
             ]
 
-            operators.[random.Next(operators.Length)]()
+            (pickFrom random options).Option ()
 
     [<AutoOpen>]
     module Parsers =
