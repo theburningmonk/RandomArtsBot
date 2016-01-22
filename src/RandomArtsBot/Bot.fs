@@ -29,7 +29,7 @@ module Processor =
         elif text = "help" then Help
         else Mention
 
-    let createResponse botname random (status : Status) = async {
+    let createResponse botname (status : Status) = async {
         let recipient = status.User.ScreenNameResponse
         let statusId  = status.StatusID
         let text      = normalize botname status.Text
@@ -52,7 +52,8 @@ module Processor =
         | Mention ->
             return createResp "Thank you for your attention :-)" []
         | Query expr -> 
-            let path = RandomArt.drawImage random expr
+            let random  = new Random(int DateTime.UtcNow.Ticks)
+            let path, _ = RandomArt.drawImage random expr
             let! mediaId = Twitter.uploadImage path
             return createResp "here you go" [ mediaId ]
         | InvalidQuery _ ->
@@ -61,8 +62,9 @@ module Processor =
                     []
     }
 
-    let createTweet random = async {
+    let createTweet () = async {
         let rec attempt n = async {
+            let random = new Random(int System.DateTime.UtcNow.Ticks)
             if n = 0 then return None
             else 
                 let expr = RandomArt.genExpr random 5
@@ -70,37 +72,40 @@ module Processor =
                 if not isNewExpr then
                     return! attempt (n-1)
                 else 
-                    let path = RandomArt.drawImage random expr
-                    let! mediaId = Twitter.uploadImage path
-                    let tweet = 
-                        {
-                            Message  = expr.ToString()
-                            MediaIDs = [ mediaId  ]
-                        }
-                    return Some tweet
+                    let path, bitmap = RandomArt.drawImage random expr
+                    if Critic.isGoodEnough bitmap then
+                        let! mediaId = Twitter.uploadImage path
+                        let tweet = 
+                            {
+                                Message  = expr.ToString()
+                                MediaIDs = [ mediaId  ]
+                            }
+                        return Some tweet
+                    else
+                        return! attempt (n-1)
         }
         
-        return! attempt 3
+        return! attempt 10
     }
         
     let rec loop botname sinceId = async {
         logInfof "[%s] Checking for new mentions" botname
         let mentions, nextId, delay = Twitter.pullMentions sinceId
 
-        let random = new Random(int DateTime.UtcNow.Ticks)
-        
         match nextId with
         | Some id -> do! State.updateLastMention botname id
         | _ -> ()
       
         for mention in mentions do
-            let! response = createResponse botname random mention
+            let! response = createResponse botname mention
             do! Twitter.send response
 
-        if mentions = [] && random.NextDouble() <= 0.5 then
-            let! tweet = createTweet random
+        if List.isEmpty mentions then
+            let! tweet = createTweet ()
             match tweet with
-            | Some x -> do! Twitter.tweet x
+            | Some x -> 
+                do! Twitter.tweet x
+                printfn "generated new tweet %s" x.Message
             | _      -> ()
 
         do! Async.Sleep (int delay.TotalMilliseconds)

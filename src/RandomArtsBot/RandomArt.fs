@@ -135,10 +135,10 @@ module RandomArt =
         | Mix (e1, e2, e3) ->
             let f1, f2, f3 = eval random e1, eval random e2, eval random e3
             fun (x, y) ->
-                let n, _, _ = f1 (x,y)
+                let n, _, _ = f1 (x, y)
                 let w  = 0.5 * (n + 1.0)
-                let c1 = f2 (x,y)
-                let c2 = f3 (x,y)
+                let c1 = f2 (x, y)
+                let c2 = f3 (x, y)
                 average (c1, c2, w)
 
     open System
@@ -386,4 +386,4 @@ module RandomArt =
                 Path.GetTempPath(), 
                 Path.GetTempFileName() + ".png")
         image.Save(path)
-        path
+        path, image

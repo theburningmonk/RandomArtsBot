@@ -2,6 +2,7 @@
 
 module RandomArt =
     open System
+    open System.Drawing
 
     type Expr =
        | VariableX
@@ -39,5 +40,5 @@ module RandomArt =
     val parse : string -> Choice<Expr, string>
 
     /// Draws a random image using the given expression and returns
-    /// the path to the image file
-    val drawImage : random:Random -> Expr -> string
+    /// the path to the image file and the Bitmap data
+    val drawImage : random:Random -> Expr -> string * Bitmap

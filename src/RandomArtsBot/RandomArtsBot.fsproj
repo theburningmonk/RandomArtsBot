@@ -52,6 +52,8 @@
     <Compile Include="Twitter.fs" />
     <Compile Include="RandomArt.fsi" />
     <Compile Include="RandomArt.fs" />
+    <Compile Include="ArtCritic.fsi" />
+    <Compile Include="ArtCritic.fs" />
     <Compile Include="State.fsi" />
     <Compile Include="State.fs" />
     <Compile Include="Bot.fs" />
