@@ -1,6 +1,8 @@
 ﻿namespace RandomArtsBot
 
 module RandomArt =
+    open System
+
     type Expr =
        | VariableX
        | VariableY
@@ -29,16 +31,13 @@ module RandomArt =
        | Level of Expr * Expr * Expr
        | Mix   of Expr * Expr * Expr
 
-    /// Returns a random float between 0 and 1
-    val next : unit -> double
-
     /// Randomly generates an expression. n determines the max depth
     /// of the expression.
-    val genExpr : n:int -> Expr
+    val genExpr : random:Random -> n:int -> Expr
 
     /// Parses a text formula into an Expr object
     val parse : string -> Choice<Expr, string>
 
     /// Draws a random image using the given expression and returns
     /// the path to the image file
-    val drawImage : Expr -> string
+    val drawImage : random:Random -> Expr -> string

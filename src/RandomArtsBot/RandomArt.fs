@@ -57,8 +57,7 @@ module RandomArt =
             | Level (e1, e2, e3) -> sprintf "(lvl %O %O %O)" e1 e2 e3 
             | Mix   (e1, e2, e3) -> sprintf "(mix %O %O %O)" e1 e2 e3
 
-    let random  = System.Random(int DateTime.UtcNow.Ticks)
-    let next () = random.NextDouble()
+    let next (random : Random) = random.NextDouble()
 
     let average (c1, c2, w) =
         let r1, g1, b1 = c1
@@ -72,59 +71,59 @@ module RandomArt =
 
     let tent x = 1.0 - 2.0 * abs x
 
-    let rec combine expr1 expr2 op =
-        let f1, f2 = eval expr1, eval expr2
+    let rec combine random expr1 expr2 op =
+        let f1, f2 = eval random expr1, eval random expr2
         fun (x, y) ->
             let r1, g1, b1 = f1 (x, y)
             let r2, g2, b2 = f2 (x, y)
             op r1 r2, op g1 g2, op b1 b2
 
-    and map expr map =
-        let f = eval expr
+    and map random expr map =
+        let f = eval random expr
         fun (x, y) ->
             let r, g, b = f(x,y)
             map r, map g, map b
 
-    and eval = function
+    and eval random = function
         | VariableX -> fun (x, _) -> (x, x, x)
         | VariableY -> fun (_, y) -> (y, y, y)
-        | Constant  -> fun (_, _) -> (next(), next(), next())
+        | Constant  -> fun (_, _) -> (next random, next random, next random)
 
-        | Add (e1, e2)      -> combine e1 e2 (+)
-        | Subtract (e1, e2) -> combine e1 e2 (-)
-        | Product (e1, e2)  -> combine e1 e2 (*)
-        | Divide (e1, e2)   -> combine e1 e2 (/)
+        | Add (e1, e2)      -> combine random e1 e2 (+)
+        | Subtract (e1, e2) -> combine random e1 e2 (-)
+        | Product (e1, e2)  -> combine random e1 e2 (*)
+        | Divide (e1, e2)   -> combine random e1 e2 (/)
 
-        | Max (e1, e2) -> combine e1 e2 max
-        | Min (e1, e2) -> combine e1 e2 min
+        | Max (e1, e2) -> combine random e1 e2 max
+        | Min (e1, e2) -> combine random e1 e2 min
         | Average (e1, e2) ->
-            let f1, f2 = eval e1, eval e2
+            let f1, f2 = eval random e1, eval random e2
             fun (x, y) ->
                 average (f1(x, y), f2(x, y), 0.5)
 
-        | Sqr (e) -> map e (fun x -> x * x)
-        | Sqrt(e) -> map e sqrt
+        | Sqr (e) -> map random e (fun x -> x * x)
+        | Sqrt(e) -> map random e sqrt
 
-        | Mod (e1, e2) -> combine e1 e2 (%)
-        | Well (e)     -> map e well
-        | Tent (e)     -> map e tent
+        | Mod (e1, e2) -> combine random e1 e2 (%)
+        | Well (e)     -> map random e well
+        | Tent (e)     -> map random e tent
 
         | Sin (e) ->
-            let phase = next() * System.Math.PI
-            let freq  = (next() * 5.0) + 1.0
-            map e (fun x -> sin (phase + x * freq))
+            let phase = next random * System.Math.PI
+            let freq  = (next random) * 5.0 + 1.0
+            map random e (fun x -> sin (phase + x * freq))
         | Cos (e) ->
-            let phase = next() * System.Math.PI
-            let freq  = (next() * 5.0) + 1.0
-            map e (fun x -> cos (phase + x * freq))
+            let phase = next random * System.Math.PI
+            let freq  = (next random) * 5.0 + 1.0
+            map random e (fun x -> cos (phase + x * freq))
         | Tan (e) ->
-            let phase = next() * System.Math.PI
-            let freq  = (next() * 5.0) + 1.0
-            map e (fun x -> tan (phase + x * freq))
+            let phase = next random * System.Math.PI
+            let freq  = (next random) * 5.0 + 1.0
+            map random e (fun x -> tan (phase + x * freq))
 
         | Level (e1, e2, e3) ->
-            let f1, f2, f3 = eval e1, eval e2, eval e3
-            let threshold  = next() * 2.0 - 1.0
+            let f1, f2, f3 = eval random e1, eval random e2, eval random e3
+            let threshold  = next random * 2.0 - 1.0
             fun (x, y) ->
                 let r1, g1, b1 = f1 (x, y)
                 let r2, g2, b2 = f2 (x, y)
@@ -134,7 +133,7 @@ module RandomArt =
                 let b = if b1 < threshold then b2 else b3
                 r, g, b
         | Mix (e1, e2, e3) ->
-            let f1, f2, f3 = eval e1, eval e2, eval e3
+            let f1, f2, f3 = eval random e1, eval random e2, eval random e3
             fun (x, y) ->
                 let n, _, _ = f1 (x,y)
                 let w  = 0.5 * (n + 1.0)
@@ -174,34 +173,34 @@ module RandomArt =
 
        image
 
-    let rec genExpr n =
-        if n <= 0 || next () < 0.01 then
-            let terminals = [VariableX; VariableY;Constant]
-            terminals.[random.Next(terminals.Length)]
+    let rec genExpr random n =
+        if n <= 0 || next random < 0.01 then
+            let terminals = [| VariableX; VariableY; Constant |]
+            terminals.[ random.Next(terminals.Length) ]
         else
             let operators = [
-                fun () -> Add ( genExpr (n-1), genExpr (n-1) )
-                fun () -> Subtract ( genExpr (n-1), genExpr (n-1) )
-                fun () -> Product  ( genExpr (n-1), genExpr (n-1) )
-                fun () -> Divide   ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Add ( genExpr random (n-1), genExpr random (n-1) )
+                fun () -> Subtract ( genExpr random (n-1), genExpr random (n-1) )
+                fun () -> Product  ( genExpr random (n-1), genExpr random (n-1) )
+                fun () -> Divide   ( genExpr random (n-1), genExpr random (n-1) )
 
-                fun () -> Max ( genExpr (n-1), genExpr (n-1) )
-                fun () -> Min ( genExpr (n-1), genExpr (n-1) )
-                fun () -> Average ( genExpr (n-1), genExpr (n-1) )
+                fun () -> Max ( genExpr random (n-1), genExpr random (n-1) )
+                fun () -> Min ( genExpr random (n-1), genExpr random (n-1) )
+                fun () -> Average ( genExpr random (n-1), genExpr random (n-1) )
 
-                fun () -> Mod  ( genExpr (n-1), genExpr (n-1) )
-                fun () -> Well ( genExpr (n-1) )
-                fun () -> Tent ( genExpr (n-1) )
+                fun () -> Mod  ( genExpr random (n-1), genExpr random (n-1) )
+                fun () -> Well ( genExpr random (n-1) )
+                fun () -> Tent ( genExpr random (n-1) )
 
-                fun () -> Sin ( genExpr (n-1) )
-                fun () -> Cos ( genExpr (n-1) )
-                fun () -> Tan ( genExpr (n-1) )
+                fun () -> Sin ( genExpr random (n-1) )
+                fun () -> Cos ( genExpr random (n-1) )
+                fun () -> Tan ( genExpr random (n-1) )
 
-                fun () -> Sqr  ( genExpr (n-1) )
-                fun () -> Sqrt ( genExpr (n-1) )
+                fun () -> Sqr  ( genExpr random (n-1) )
+                fun () -> Sqrt ( genExpr random (n-1) )
 
-                fun () -> Level ( genExpr (n-1), genExpr (n-1), genExpr (n-1) )
-                fun () -> Mix   ( genExpr (n-1), genExpr (n-1), genExpr (n-1) )
+                fun () -> Level ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
+                fun () -> Mix   ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
             ]
 
             operators.[random.Next(operators.Length)]()
@@ -311,8 +310,8 @@ module RandomArt =
 
     let parse text = tryParseExpr text
 
-    let drawImage (expr : Expr) =
-        let image = drawWith (eval expr) 1
+    let drawImage random (expr : Expr) =
+        let image = drawWith (eval random expr) 1
         let path  = 
             Path.Combine(
                 Path.GetTempPath(), 

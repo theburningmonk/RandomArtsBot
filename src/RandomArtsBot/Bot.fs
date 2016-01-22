@@ -29,7 +29,7 @@ module Processor =
         elif text = "help" then Help
         else Mention
 
-    let createResponse botname (status : Status) = async {
+    let createResponse botname random (status : Status) = async {
         let recipient = status.User.ScreenNameResponse
         let statusId  = status.StatusID
         let text      = normalize botname status.Text
@@ -52,7 +52,7 @@ module Processor =
         | Mention ->
             return createResp "Thank you for your attention :-)" []
         | Query expr -> 
-            let path = RandomArt.drawImage expr
+            let path = RandomArt.drawImage random expr
             let! mediaId = Twitter.uploadImage path
             return createResp "here you go" [ mediaId ]
         | InvalidQuery _ ->
@@ -61,31 +61,47 @@ module Processor =
                     []
     }
 
-    let createTweet () = async {
-        let expr = RandomArt.genExpr 5
-        let path = RandomArt.drawImage expr
-        let! mediaId = Twitter.uploadImage path
-        return {
-                  Message  = expr.ToString()
-                  MediaIDs = [ mediaId  ]
-               }
+    let createTweet random = async {
+        let rec attempt n = async {
+            if n = 0 then return None
+            else 
+                let expr = RandomArt.genExpr random 5
+                let! isNewExpr = State.atomicSave expr
+                if not isNewExpr then
+                    return! attempt (n-1)
+                else 
+                    let path = RandomArt.drawImage random expr
+                    let! mediaId = Twitter.uploadImage path
+                    let tweet = 
+                        {
+                            Message  = expr.ToString()
+                            MediaIDs = [ mediaId  ]
+                        }
+                    return Some tweet
+        }
+        
+        return! attempt 3
     }
         
     let rec loop botname sinceId = async {
         logInfof "[%s] Checking for new mentions" botname
         let mentions, nextId, delay = Twitter.pullMentions sinceId
+
+        let random = new Random(int DateTime.UtcNow.Ticks)
         
         match nextId with
         | Some id -> do! State.updateLastMention botname id
         | _ -> ()
       
         for mention in mentions do
-            let! response = createResponse botname mention
+            let! response = createResponse botname random mention
             do! Twitter.send response
 
-        if mentions = [] && next() <= 0.5 then
-            let! tweet = createTweet ()
-            do! Twitter.tweet tweet
+        if mentions = [] && random.NextDouble() <= 0.5 then
+            let! tweet = createTweet random
+            match tweet with
+            | Some x -> do! Twitter.tweet x
+            | _      -> ()
 
         do! Async.Sleep (int delay.TotalMilliseconds)
 
