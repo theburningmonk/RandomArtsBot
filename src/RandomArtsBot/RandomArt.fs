@@ -190,7 +190,7 @@ module RandomArt =
         options |> Seq.item idx
 
     let rec genExpr random n =
-        if n <= 0 || next random < 0.01 then
+        if n <= 0 || next random < 0.05 then
             let terminals = [| VariableX; VariableY; Constant |]
             terminals.[ random.Next(terminals.Length) ]
         else

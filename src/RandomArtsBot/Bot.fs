@@ -46,44 +46,45 @@ module Processor =
 
         match text with
         | Help -> 
-            return createResp 
-                    "Thank you for your interest, plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
-                    []
+            let msg = "Thank you for your interest, plz see doc : http://theburningmonk.github.io/RandomArtsBot"
+            return Some <| createResp msg []
         | Mention ->
-            return createResp "Thank you for your attention :-)" []
+            return Some <| createResp "Thank you for your attention :-)" []
         | Query expr -> 
             let random  = new Random(int DateTime.UtcNow.Ticks)
             let path, _ = RandomArt.drawImage random expr
             let! mediaId = Twitter.uploadImage path
-            return createResp "here you go" [ mediaId ]
+            return Some <| createResp "here you go" [ mediaId ]
         | InvalidQuery _ ->
-            return createResp 
-                    "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
-                    []
+            let msg = "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
+            return Some <| createResp msg []
     }
+
+    let (|GoodEnough|_|) random expr =
+        let path, bitmap = RandomArt.drawImage random expr
+        if Critic.isGoodEnough bitmap 
+        then Some path
+        else None
 
     let createTweet () = async {
         let rec attempt n = async {
             let random = new Random(int System.DateTime.UtcNow.Ticks)
+
             if n = 0 then return None
-            else 
-                let expr = RandomArt.genExpr random 5
+            else
+                let expr = RandomArt.genExpr random 6
                 logInfof "Generated expression :\n\t%O\n" expr
                 let! isNewExpr = State.atomicSave expr
-                if not isNewExpr then
-                    return! attempt (n-1)
-                else 
-                    let path, bitmap = RandomArt.drawImage random expr
-                    if Critic.isGoodEnough bitmap then
-                        let! mediaId = Twitter.uploadImage path
-                        let tweet = 
-                            {
-                                Message  = expr.ToString()
-                                MediaIDs = [ mediaId  ]
-                            }
-                        return Some tweet
-                    else
-                        return! attempt (n-1)
+                match isNewExpr, expr with
+                | true, GoodEnough random path ->
+                    let! mediaId = Twitter.uploadImage path
+                    let tweet = 
+                        {
+                            Message  = expr.ToString()
+                            MediaIDs = [ mediaId  ]
+                        }
+                    return Some tweet
+                | _ -> return! attempt (n-1)
         }
         
         return! attempt 10
@@ -102,7 +103,10 @@ module Processor =
             logInfof "Message : %s" mention.Text
 
             let! response = createResponse botname mention
-            do! Twitter.send response
+            match response with
+            | Some x -> do! Twitter.send x
+            | _ -> ()
+
             do! Twitter.follow (uint64 mention.User.UserIDResponse)
 
         if List.isEmpty mentions then
