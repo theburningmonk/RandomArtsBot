@@ -234,3 +234,9 @@ module Twitter =
     let tweet t = async {
         twitterAgent.Post (Tweet t)
     }
+
+    let follow (userId : uint64) = async {
+        if userId <> 0UL then
+            let! user = context.CreateFriendshipAsync(userId, true) |> Async.AwaitTask
+            logInfof "Followed user %s" <| user.PrettyPrint()
+    }

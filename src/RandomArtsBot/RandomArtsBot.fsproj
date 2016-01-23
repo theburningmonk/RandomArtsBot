@@ -48,6 +48,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Logging.fs" />
+    <Compile Include="Extensions.fs" />
     <Compile Include="Twitter.fsi" />
     <Compile Include="Twitter.fs" />
     <Compile Include="RandomArt.fsi" />

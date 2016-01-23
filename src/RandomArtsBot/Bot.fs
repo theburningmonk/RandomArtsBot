@@ -98,8 +98,12 @@ module Processor =
         | _ -> ()
       
         for mention in mentions do
+            logInfof "Mentioned by %s" <| mention.User.PrettyPrint()
+            logInfof "Message : %s" mention.Text
+
             let! response = createResponse botname mention
             do! Twitter.send response
+            do! Twitter.follow (uint64 mention.User.UserIDResponse)
 
         if List.isEmpty mentions then
             let! tweet = createTweet ()

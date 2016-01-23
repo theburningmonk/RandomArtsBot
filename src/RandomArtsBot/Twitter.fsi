@@ -32,3 +32,6 @@ module Twitter =
 
     /// Tweets a new tweet
     val tweet : Tweet -> Async<unit>
+
+    /// Follows a twitter user
+    val follow : userId:uint64 -> Async<unit>
