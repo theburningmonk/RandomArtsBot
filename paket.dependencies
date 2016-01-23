@@ -2,8 +2,7 @@ source https://nuget.org/api/v2
 nuget AWSSDK.DynamoDBv2
 nuget FParsec
 nuget LinqToTwitter
-nuget NLog
-nuget NLog.Config
+nuget log4net
 nuget TopShelf
 
 group Build

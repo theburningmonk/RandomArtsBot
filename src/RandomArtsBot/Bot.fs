@@ -1,6 +1,6 @@
 ﻿namespace RandomArtsBot
 
-open NLog
+open log4net
 
 module Processor = 
     open System
@@ -68,6 +68,7 @@ module Processor =
             if n = 0 then return None
             else 
                 let expr = RandomArt.genExpr random 5
+                logInfof "Generated expression :\n\t%O\n" expr
                 let! isNewExpr = State.atomicSave expr
                 if not isNewExpr then
                     return! attempt (n-1)
@@ -105,7 +106,7 @@ module Processor =
             match tweet with
             | Some x -> 
                 do! Twitter.tweet x
-                printfn "generated new tweet %s" x.Message
+                logInfof "Published new tweet :\n\t%s\n" x.Message
             | _      -> ()
 
         do! Async.Sleep (int delay.TotalMilliseconds)
@@ -113,7 +114,7 @@ module Processor =
         return! loop botname nextId
     }
 
-type Bot (botname) =
+type Bot (botname : string) =
     let logger = LogManager.GetLogger botname
 
     member __.Start () =

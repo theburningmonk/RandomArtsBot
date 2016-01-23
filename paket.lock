@@ -18,6 +18,7 @@ NUGET
       Rx-Linq (>= 2.2.5)
       Rx-Main (>= 2.2.5)
       Rx-PlatformServices (>= 2.2.5)
+    log4net (2.0.5)
     Microsoft.Bcl (1.1.10)
       Microsoft.Bcl.Build (>= 1.0.14)
     Microsoft.Bcl.Async (1.0.168) - framework: portable-net45+win8+wp8+wpa81
@@ -29,11 +30,6 @@ NUGET
       Microsoft.Bcl (>= 1.1.10)
       Microsoft.Bcl.Build (>= 1.0.14)
     Mono.Security (3.2.3)
-    NLog (4.2.3)
-    NLog.Config (4.2.3)
-      NLog (>= 4.2.3)
-      NLog.Schema (>= 4.0)
-    NLog.Schema (4.2.3)
     PCLCrypto (1.0.86) - framework: portable-net45+win8+wp8+wpa81
       Mono.Security (>= 3.2.3.0 < 4.0) - framework: >= net40
       Validation (>= 2.0.6 < 3.0)

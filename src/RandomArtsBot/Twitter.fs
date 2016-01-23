@@ -7,7 +7,7 @@ module Twitter =
     open System.IO
 
     open LinqToTwitter
-    open NLog
+    open log4net
 
     type StatusID = uint64
     type MediaID  = uint64

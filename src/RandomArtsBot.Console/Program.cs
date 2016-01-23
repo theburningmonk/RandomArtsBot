@@ -3,15 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using NLog;
+using log4net;
 using Topshelf;
 using RandomArtsBot;
+
+[assembly: log4net.Config.XmlConfigurator(Watch = true)]
 
 namespace RandomArtsBot.Console
 {
     class Program
     {
-        private static Logger Logger = LogManager.GetCurrentClassLogger();
+        private static ILog Logger = LogManager.GetLogger(typeof(Program));
 
         static void Main(string[] args)
         {

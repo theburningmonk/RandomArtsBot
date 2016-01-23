@@ -2,19 +2,19 @@
 
 [<AutoOpen>]
 module Logging =
-    open NLog
+    open log4net
 
-    let logDebugf (logger : Logger) fmt =
+    let logDebugf (logger : ILog) fmt =
         Printf.ksprintf logger.Debug fmt
 
-    let logInfof (logger : Logger) fmt = 
+    let logInfof (logger : ILog) fmt = 
         Printf.ksprintf logger.Info fmt
 
-    let logWarnf (logger : Logger) fmt = 
+    let logWarnf (logger : ILog) fmt = 
         Printf.ksprintf logger.Warn fmt
 
-    let logErrorf (logger : Logger) fmt = 
+    let logErrorf (logger : ILog) fmt = 
         Printf.ksprintf logger.Error fmt
         
-    let logFatalf (logger : Logger) fmt = 
+    let logFatalf (logger : ILog) fmt = 
         Printf.ksprintf logger.Fatal fmt
