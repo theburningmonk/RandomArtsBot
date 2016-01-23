@@ -9,7 +9,7 @@ module State =
         | Us | Them
 
     /// returns the converstions with this recipient so far
-    val getConvo : string -> Async<(DateTime * Speaker * string)[]>
+    val getConvo : string -> Async<seq<DateTime * Speaker * string>>
 
     /// add lines to an ongoing conversation with a recipient
     val addConvo : string -> seq<DateTime * Speaker * string> -> Async<unit>

@@ -8,6 +8,8 @@ module Processor =
     open LinqToTwitter
     open Twitter
     open RandomArt
+    open State
+    open Extensions
 
     let logger = LogManager.GetLogger "Processor"
     let logInfof fmt = logInfof logger fmt
@@ -28,6 +30,43 @@ module Processor =
             | Choice2Of2 err  -> InvalidQuery err
         elif text = "help" then Help
         else Mention
+
+    let sameAsLastTime text (convo : seq<DateTime * Speaker * string>) =
+        let theirMessages =
+            convo 
+            |> Seq.choose (function
+                | _, Them, msg -> Some msg
+                | _            -> None)
+
+        if Seq.isEmpty theirMessages 
+        then false
+        else theirMessages |> Seq.head |> ((=) text)
+
+    let invalidQueryStreak n (convo : seq<DateTime * Speaker * string>) =
+        let theirMessages =
+            convo 
+            |> Seq.choose (function
+                | _, Them, msg -> Some msg
+                | _            -> None)
+
+        let msgs = theirMessages |> Seq.take n
+        if Seq.length msgs < n then false
+        else 
+            msgs 
+            |> Seq.forall (function 
+                | InvalidQuery _ -> true
+                | _              -> false)
+
+    /// Determines if we should keep conversing with the sender.
+    /// Don't respond, if:
+    ///     - sender sent the same invalid query twice in a row
+    ///     - sender already sent 5 invalid queries in a row
+    let shouldKeepTalking sender invalidQuery = async {
+        let! convo = State.getConvo sender
+        
+        return sameAsLastTime invalidQuery convo
+            || invalidQueryStreak 5 convo
+    }
 
     let createResponse botname (status : Status) = async {
         let recipient = status.User.ScreenNameResponse
@@ -55,9 +94,14 @@ module Processor =
             let path, _ = RandomArt.drawImage random expr
             let! mediaId = Twitter.uploadImage path
             return Some <| createResp "here you go" [ mediaId ]
-        | InvalidQuery _ ->
-            let msg = "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
-            return Some <| createResp msg []
+        | InvalidQuery text ->
+            let! keepTalking = shouldKeepTalking recipient text
+            if not <| keepTalking then
+                logInfof "mm.. suspicious conversation, let's stop talking"
+                return None
+            else
+                let msg = "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
+                return Some <| createResp msg []
     }
 
     let (|GoodEnough|_|) random expr =

@@ -40,7 +40,7 @@ module State =
     let getConvo recipientName = async {
         let path = Path.Combine(convoFolder, recipientName)
         if not <| File.Exists path 
-        then return [||]
+        then return Seq.empty<DateTime * Speaker * string>
         else
             let convo =
                 File.ReadAllLines path
@@ -48,6 +48,7 @@ module State =
                     let [| dt; s; msg |] = line.Split([|','|], 3)
                     let timestamp = DateTime.ParseExact(dt, datetimeFormat, null)
                     timestamp, Speaker.Parse s, msg)
+                |> Seq.sortByDescending (fun (dt, _, _) -> dt)
             return convo
     }
 

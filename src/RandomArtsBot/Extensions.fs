@@ -20,3 +20,11 @@ module Extensions =
                     user.FriendsCount
                     user.FavoritesCount
                     user.Location
+
+    open System.Linq
+
+    module Seq =
+        /// the built-in Seq.take excepts when there are insufficient no
+        /// of items, but LINQ's Take doesn't, and that's the behaviour
+        /// we usually want anyway
+        let take n (xs : seq<'a>) = xs.Take(n) :> seq<'a>
