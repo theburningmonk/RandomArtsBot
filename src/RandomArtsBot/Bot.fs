@@ -18,10 +18,11 @@ module Processor =
         text.ToLower().Replace(botname, "").Trim()
 
     let probablyQuery (text : string) =
-        (text.Contains "(" 
-        || text.Contains "x"
-        || text.Contains "y"
-        || text.Contains "const")
+        if text.Contains "(" then true
+        else
+            match text.Trim().ToLower() with
+            | "x" | "y" | "const" -> true
+            | _ -> false
 
     let (|Query|InvalidQuery|Help|Mention|) text =
         if probablyQuery text then 
@@ -46,15 +47,23 @@ module Processor =
         let theirMessages =
             convo 
             |> Seq.choose (function
-                | _, Them, msg -> Some msg
-                | _            -> None)
+                | dt, Them, msg -> Some (dt, msg)
+                | _             -> None)
 
-        let msgs = theirMessages |> Seq.take n
+        let now = DateTime.UtcNow
+        let msgs = // messages from them in the last hour
+            theirMessages
+            |> Seq.take n
+            |> Seq.takeWhile (fun (dt, _) -> 
+                (now - dt) < TimeSpan.FromHours 1.0)
+            |> Seq.map snd
+
         if Seq.length msgs < n then false
         else 
             msgs 
             |> Seq.forall (function 
-                | InvalidQuery _ -> true
+                | InvalidQuery _
+                | Mention        -> true
                 | _              -> false)
 
     /// Determines if we should keep conversing with the sender.
@@ -94,7 +103,7 @@ module Processor =
             let path, _ = RandomArt.drawImage random expr
             let! mediaId = Twitter.uploadImage path
             return Some <| createResp "here you go" [ mediaId ]
-        | InvalidQuery text ->
+        | InvalidQuery err ->
             let! keepTalking = shouldKeepTalking recipient text
             if not <| keepTalking then
                 logInfof "mm.. suspicious conversation, let's stop talking"
