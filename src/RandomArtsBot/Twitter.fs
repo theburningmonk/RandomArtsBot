@@ -152,7 +152,7 @@ module Twitter =
         | Tweet       of Tweet
         | UploadImage of filepath:string * AsyncReplyChannel<MediaID>
 
-    let twitterAgent = Agent<TwitterAction>.Start(fun inbox ->
+    let twitterAgent = Agent<TwitterAction>.StartProtected(fun inbox ->
         let reply (resp : Response) = async {
             let message = 
                 sprintf "@%s %s" resp.RecipientName resp.Message
