@@ -57,7 +57,7 @@ module State =
         let lines = 
             convo 
             |> Seq.map (fun (dt, s, msg) -> 
-                sprintf "%s, %O, %s" (dt.ToString(datetimeFormat)) s msg)
+                sprintf "%s,%O,%s" (dt.ToString(datetimeFormat)) s msg)
         File.AppendAllLines(path, lines)
     }
 

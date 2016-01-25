@@ -57,6 +57,10 @@
     <Compile Include="ArtCritic.fs" />
     <Compile Include="State.fsi" />
     <Compile Include="State.fs" />
+    <Compile Include="Generator.fsi" />
+    <Compile Include="Generator.fs" />
+    <Compile Include="Responder.fsi" />
+    <Compile Include="Responder.fs" />
     <Compile Include="Bot.fs" />
     <None Include="Script.fsx" />
     <None Include="paket.references" />
