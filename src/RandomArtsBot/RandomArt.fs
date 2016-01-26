@@ -87,7 +87,9 @@ module RandomArt =
     and eval random = function
         | VariableX -> fun (x, _) -> (x, x, x)
         | VariableY -> fun (_, y) -> (y, y, y)
-        | Constant  -> fun (_, _) -> (next random, next random, next random)
+        | Constant  -> 
+            let r, g, b = next random, next random, next random
+            fun (_, _) -> r, g, b
 
         | Add (e1, e2)      -> combine random e1 e2 (+)
         | Subtract (e1, e2) -> combine random e1 e2 (-)

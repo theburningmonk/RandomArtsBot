@@ -12,7 +12,7 @@ type Bot (botname : string) =
 
         Responder.start botname
 
-        Generator.start 60000
+        Generator.start 600000
 
         logInfof logger "[%s] started" botname
 

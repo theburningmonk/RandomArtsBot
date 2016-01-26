@@ -30,7 +30,7 @@ namespace RandomArtsBot.Console
 
                 x.RunAsLocalSystem();
 
-                x.SetDescription("F Random Arts Bot");
+                x.SetDescription("F# Random Arts Bot");
                 x.SetDisplayName("RandomArtsBot");
                 x.SetServiceName("RandomArtsBot");
             });
