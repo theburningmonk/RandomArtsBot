@@ -155,7 +155,7 @@ module Twitter =
     let twitterAgent = Agent<TwitterAction>.StartProtected(fun inbox ->
         let reply (resp : Response) = async {
             let message = 
-                sprintf "@%s %s" resp.RecipientName resp.Message
+                sprintf ".@%s %s" resp.RecipientName resp.Message
                 |> trimToTweet resp.MediaIDs
 
             do! context.ReplyAsync(resp.StatusID, message, resp.MediaIDs) 
