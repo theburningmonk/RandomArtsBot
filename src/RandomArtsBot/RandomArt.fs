@@ -199,15 +199,15 @@ module RandomArt =
             let options = [
                 { 
                     Option = fun () -> Add ( genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 30
+                    Weight = 49
                 }
                 { 
                     Option = fun () -> Subtract ( genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 10
+                    Weight = 40
                 }
                 { 
                     Option = fun () -> Product ( genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 10
+                    Weight = 20
                 }
                 { 
                     Option = fun () -> Divide ( genExpr random (n-1), genExpr random (n-1) )
@@ -216,61 +216,61 @@ module RandomArt =
 
                 { 
                     Option = fun () -> Max ( genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 3
+                    Weight = 5
                 }
                 {
                     Option = fun () -> Min ( genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 5 
+                    Weight = 5
                 }
                 { 
                     Option = fun () -> Average ( genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 10
+                    Weight = 30
                 }
 
                 { 
                     Option = fun () -> Mod ( genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 50
+                    Weight = 40
                 }
                 { 
                     Option = fun () -> Well ( genExpr random (n-1) )
-                    Weight = 5
+                    Weight = 100
                 }
                 { 
                     Option = fun () -> Tent ( genExpr random (n-1) )
-                    Weight = 5
+                    Weight = 100
                 }
                 
                 { 
                     Option = fun () -> Sin ( genExpr random (n-1) )
-                    Weight = 25
+                    Weight = 50
                 }
                 { 
                     Option = fun () -> Cos ( genExpr random (n-1) )
-                    Weight = 25
+                    Weight = 50
                 }
                 { 
                     Option = fun () -> Tan ( genExpr random (n-1) )
-                    Weight = 25
+                    Weight = 50
                 }
                 
                 { 
                     Option = fun () -> Sqr ( genExpr random (n-1) )
-                    Weight = 2
+                    Weight = 1
                 }
                 { 
                     Option = fun () -> Sqrt ( genExpr random (n-1) )
-                    Weight = 2 
+                    Weight = 1
                 }
                 
                 { 
                     Option = fun () -> 
                         Level ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 5
+                    Weight = 10
                 }
                 { 
                     Option = fun () -> 
                         Mix ( genExpr random (n-1), genExpr random (n-1), genExpr random (n-1) )
-                    Weight = 5
+                    Weight = 10
                 }
             ]
 
