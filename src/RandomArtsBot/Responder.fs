@@ -11,9 +11,6 @@ module Responder =
     let logInfof fmt  = logInfof logger fmt
     let logErrorf fmt = logErrorf logger fmt
 
-    let normalize botname (text : string) = 
-        text.ToLower().Replace(botname, "").Trim()
-
     let probablyQuery (text : string) =
         if text.Contains "(" then true
         else
@@ -21,13 +18,13 @@ module Responder =
             | "x" | "y" | "const" -> true
             | _ -> false
 
-    let (|Query|InvalidQuery|Help|Mention|) text =
+    let (|Query|InvalidQuery|Help|Other|) text =
         if probablyQuery text then 
             match parse text with
             | Choice1Of2 expr -> Query expr
             | Choice2Of2 err  -> InvalidQuery err
         elif text = "help" then Help
-        else Mention
+        else Other text
 
     let sameAsLastTime text timeFrame (convo : seq<DateTime * Speaker * string>) =
         let now = DateTime.UtcNow
@@ -62,8 +59,8 @@ module Responder =
             msgs 
             |> Seq.forall (function 
                 | InvalidQuery _
-                | Mention        -> true
-                | _              -> false)
+                | Other _ -> true
+                | _       -> false)
     
     /// Determines if we should keep conversing with the sender.
     /// Don't respond, if:
@@ -79,72 +76,61 @@ module Responder =
             && (not <| invalidQueryStreak 5 ``10 mins`` convo)
     }
 
-    type Mention =
-        {
-            Id        : StatusID 
-            Sender    : string
-            SenderId  : uint64
-            Message   : string
-            Timestamp : DateTime
-        }
-
     let getMentions botname sinceId = async {
         logInfof "[%s] Checking for new mentions..." botname
-        let statuses, nextId, delay = Twitter.pullMentions sinceId
+        let mentions, nextId, delay = Twitter.pullMentions sinceId
 
-        match statuses with
+        match mentions with
         | [] -> logInfof "[%s] No new mentions." botname
-        | _  -> logInfof "[%s] Found %d new mentions." botname statuses.Length
-
-        let mentions =
-            statuses 
-            |> List.map (fun s ->
-                {
-                    Id        = s.StatusID
-                    Sender    = s.User.ScreenNameResponse
-                    SenderId  = uint64 s.User.UserIDResponse
-                    Message   = normalize botname s.Text
-                    Timestamp = s.CreatedAt
-                })
+        | _  -> logInfof "[%s] Found %d new mentions." botname mentions.Length
 
         return mentions, nextId, delay
     }
 
-    let createResponse { Id = id; Sender = sender; Message = msg } = async {
-        logInfof "Responding to [%s] [%d] [%s]" sender id msg
+    let createResponse (interaction : Interaction) = async {
+        logInfof "Responding to [%O]" interaction
 
-        let createResp msg mediaIds =
+        let createResp msg reply mediaIds =
             {
-                RecipientName = sender
-                StatusID      = id
-                Message       = msg
-                MediaIDs      = mediaIds
+                SenderHandle    = interaction.User.Handle
+                SenderMessage   = msg
+                SenderMessageId = interaction.Id
+                Reply           = reply
+                MediaIds        = mediaIds
             }
 
-        match msg with
-        | Help -> 
-            let msg = "Thank you for your interest, plz see doc : http://theburningmonk.github.io/RandomArtsBot"
-            return Some <| createResp msg []
-        | Mention ->
-            let! keepTalking = shouldKeepTalking sender msg
+        match interaction with
+        | Retweet _ | Fav _ -> 
+            return None
+        | Mention (_, _, (Help as msg), _) 
+        | DM (_, _, (Help as msg), _) -> 
+            let reply = "Thank you for your interest, plz see doc : http://theburningmonk.github.io/RandomArtsBot"
+            return Some <| createResp msg reply []
+        | Mention (user, _, Other msg, _) 
+        | DM (user, _, Other msg, _) -> 
+            let! keepTalking = shouldKeepTalking user.Handle msg
             if not keepTalking then
                 logInfof "mm.. suspicious conversation, let's stop talking"
                 return None
             else
-                return Some <| createResp "Thank you for your attention :-)" []
-        | Query expr -> 
-            let random  = new Random(int DateTime.UtcNow.Ticks)
-            let path, _ = RandomArt.drawImage random expr
+                let reply = "Thank you for your attention :-)"
+                return Some <| createResp msg reply []
+        | Mention (_, _, (Query expr as msg), _) 
+        | DM (_, _, (Query expr as msg), _) -> 
+            let random   = new Random(int DateTime.UtcNow.Ticks)
+            let path, _  = RandomArt.drawImage random expr
             let! mediaId = Twitter.uploadImage path
-            return Some <| createResp "here you go" [ mediaId ]
-        | InvalidQuery err ->
-            let! keepTalking = shouldKeepTalking sender msg
+            let reply    = "here you go"
+            return Some <| createResp msg reply [ mediaId ]
+        | Mention (user, _, (InvalidQuery err as msg), _) 
+        | DM (user, _, (InvalidQuery err as msg), _) -> 
+            let! keepTalking = shouldKeepTalking user.Handle msg
             if not keepTalking then
                 logInfof "mm.. suspicious conversation, let's stop talking"
                 return None
             else
-                let msg = "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
-                return Some <| createResp msg []
+                let reply = "I didn't understand that :-( plz see doc : http://theburningmonk.github.io/RandomArtsBot" 
+                return Some <| createResp msg reply []
     }
 
     let rec loop botname sinceId = async {
@@ -160,15 +146,18 @@ module Responder =
             | Some x -> 
                 do! Twitter.send x
                 do! State.addConvo 
-                        mention.Sender 
-                        [ mention.Timestamp, Them, mention.Message
-                          DateTime.UtcNow, Us, x.Message ]
+                        mention.User.Handle 
+                        [ mention.Timestamp, Them, x.SenderMessage
+                          DateTime.UtcNow, Us, x.Reply ]
             | _ ->
-                do! State.addConvo
-                        mention.Sender
-                        [ mention.Timestamp, Them, mention.Message ]
+                match mention with
+                | Mention (_, _, msg, _) ->
+                    do! State.addConvo
+                            mention.User.Handle
+                            [ mention.Timestamp, Them, msg ]
+                | _ -> ()
 
-            do! Twitter.follow mention.SenderId
+            do! Twitter.follow mention.User.Id
 
         do! Async.Sleep (int delay.TotalMilliseconds)
 

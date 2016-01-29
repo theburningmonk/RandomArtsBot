@@ -31,17 +31,14 @@ module Extensions =
 
     type Async with
         static member StartProtected(computation, onError, ?cancellationToken) =
-            let wrapped =
+            let rec wrapped =
                 async {
                     let! res = Async.Catch computation
                     match res with
-                    | Choice1Of2 _ -> ()
+                    | Choice1Of2 ()  -> do ()
                     | Choice2Of2 exn ->
                         onError exn
-                        Async.StartProtected(
-                            computation, 
-                            onError, 
-                            ?cancellationToken = cancellationToken)
+                        do! wrapped
                 }
 
             Async.Start(wrapped, ?cancellationToken = cancellationToken)

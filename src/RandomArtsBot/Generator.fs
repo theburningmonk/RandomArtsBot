@@ -31,7 +31,7 @@ module Generator =
                     let tweet : Tweet = 
                         {
                             Message  = expr.ToString()
-                            MediaIDs = [ mediaId  ]
+                            MediaIds = [ mediaId  ]
                         }
                     return Some tweet
                 | _ -> return! attempt (n-1)

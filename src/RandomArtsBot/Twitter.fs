@@ -5,12 +5,118 @@ module Twitter =
     open System.Configuration
     open System.Drawing
     open System.IO
+    open System.Text.RegularExpressions
 
     open LinqToTwitter
     open log4net
 
-    type StatusID = uint64
-    type MediaID  = uint64
+    type Id      = uint64
+    type Message = string
+
+    let twitterHandleRegex = Regex("@[a-z0-9_]{1,15}")
+
+    let normalize (text : string) = 
+        twitterHandleRegex.Replace(text.ToLower(), "").Trim()
+
+    type User =
+        {
+            Id             : Id
+            Name           : string
+            Handle         : string
+            Description    : string
+            FollowersCount : int
+            FriendsCount   : int
+            FavoritesCount : int
+            Location       : string
+        }
+
+        static member Of (status : Status) =
+            {
+                Id     = uint64 status.User.UserIDResponse
+                Name   = status.User.Name 
+                Handle = "@" + status.User.ScreenNameResponse
+                Description    = status.User.Description 
+                FollowersCount = status.User.FollowersCount
+                FriendsCount   = status.User.FriendsCount
+                FavoritesCount = status.User.FavoritesCount
+                Location       = status.User.Location
+            }
+
+        static member Of (dm : DirectMessage) =
+            {
+                Id     = uint64 dm.Sender.UserIDResponse
+                Name   = dm.Sender.Name 
+                Handle = "@" + dm.Sender.ScreenNameResponse
+                Description    = dm.Sender.Description 
+                FollowersCount = dm.Sender.FollowersCount
+                FriendsCount   = dm.Sender.FriendsCount
+                FavoritesCount = dm.Sender.FavoritesCount
+                Location       = dm.Sender.Location
+            }
+
+    type Interaction =
+        | Mention of User * Id * Message * createdAt:DateTime
+        | DM      of User * Id * Message * createdAt:DateTime
+        | Retweet of User * Id * createdAt:DateTime
+        | Fav     of User * Id * createdAt:DateTime
+
+        member x.Id =
+            match x with
+            | Mention (_, id, _, _)
+            | DM (_, id, _, _)
+            | Retweet (_, id, _)
+            | Fav (_, id, _) -> id
+
+        member x.User =
+            match x with
+            | Mention (user, _, _, _)
+            | DM (user, _, _, _)
+            | Retweet (user, _, _)
+            | Fav (user, _, _) -> user
+
+        member x.Timestamp =
+            match x with
+            | Mention (_, _, _, dt)
+            | DM (_, _, _, dt)
+            | Retweet (_, _, dt)
+            | Fav (_, _, dt) -> dt
+
+        override x.ToString() =
+            match x with
+            | Mention (user, id, msg, _) -> 
+                sprintf "Mention by %s [%s] [%d]" user.Handle msg id
+            | DM (user, id, msg, _) ->
+                sprintf "DM by %s [%s] [%d]" user.Handle msg id
+            | Retweet (user, _, _) ->
+                sprintf "Retweet by %s" user.Handle
+            | Fav (user, _, _) ->
+                sprintf "Fav by %s" user.Handle
+
+        static member Of (status : Status) =
+            match status.Type with
+            | StatusType.Mentions -> 
+                Mention (User.Of status, status.StatusID, normalize status.Text, status.CreatedAt)
+            | StatusType.Retweets 
+            | StatusType.RetweetsOfMe ->
+                Retweet (User.Of status, status.StatusID, status.CreatedAt)
+
+        static member Of (dm : DirectMessage) =
+            DM (User.Of dm, dm.ID, normalize dm.Text, dm.CreatedAt)
+
+    type Response = 
+        {
+            SenderHandle    : string
+            SenderMessage   : string
+            SenderMessageId : Id
+            Reply           : string
+            MediaIds        : Id list
+        }
+
+    type Tweet =
+        {
+            Message  : string
+            MediaIds : Id list
+        }
 
     let logger = LogManager.GetLogger "Twitter"
     let logInfof fmt = logInfof logger fmt
@@ -93,9 +199,37 @@ module Twitter =
                 nextReset - DateTime.UtcNow
         delay.Add safetyBuffer
 
-    let pullMentions (sinceID : StatusID Option) =
+    let pullDMs (sinceId : Id option) =
+        let messages = 
+            match sinceId with
+            | None ->
+                query { 
+                    for dm in context.DirectMessage do 
+                    where (dm.Type = DirectMessageType.SentTo)
+                    select dm 
+                }
+            | Some(id) ->
+                query { 
+                    for dm in context.DirectMessage do 
+                    where (dm.Type = DirectMessageType.SentTo && dm.SinceID = id)
+                    where (dm.ID <> id)
+                    select dm
+                }
+            |> Seq.toList
+
+        let wait = delayUntilNextCall context
+        logInfof "pullMentions : next call in %A" wait
+
+        let nextId =
+            match messages with
+            | []  -> sinceId
+            | lst -> lst |> Seq.map (fun s -> s.ID) |> Seq.max |> Some
+
+        messages |> List.map Interaction.Of, nextId, wait
+
+    let pullMentions (sinceId : Id Option) =
         let mentions = 
-            match sinceID with
+            match sinceId with
             | None ->
                 query { 
                     for tweet in context.Status do 
@@ -107,21 +241,21 @@ module Twitter =
                     for tweet in context.Status do 
                     where (tweet.Type = StatusType.Mentions && tweet.SinceID = id)
                     where (tweet.StatusID <> id)
-                    select tweet 
+                    select tweet
                 }
             |> Seq.toList
 
         let wait = delayUntilNextCall context
         logInfof "pullMentions : next call in %A" wait
 
-        let updatedSinceID =
+        let nextId =
             match mentions with
-            | []    -> sinceID
-            | hd::_ -> Some hd.StatusID
+            | []  -> sinceId
+            | lst -> lst |> Seq.map (fun s -> s.StatusID) |> Seq.max |> Some
 
-        mentions, updatedSinceID, wait
+        mentions |> List.map Interaction.Of, nextId, wait
 
-    let trimToTweet (mediaIds : MediaID list) (msg : string) =
+    let trimToTweet (mediaIds : Id list) (msg : string) =
         let maxLen =
             match mediaIds with
             | [] -> 140
@@ -131,41 +265,27 @@ module Twitter =
         then msg.Substring(0, maxLen-6) + " [...]"
         else msg
 
-    type Response = 
-        {
-            RecipientName : string
-            StatusID      : StatusID
-            Message       : string
-            MediaIDs      : MediaID list
-        }
-
-    type Tweet =
-        {
-            Message     : string
-            MediaIDs    : MediaID list
-        }
-
     type Agent<'T> = MailboxProcessor<'T>
 
     type TwitterAction =
         | SendReply   of Response
         | Tweet       of Tweet
-        | UploadImage of filepath:string * AsyncReplyChannel<MediaID>
+        | UploadImage of filepath:string * AsyncReplyChannel<Id>
 
     let twitterAgent = Agent<TwitterAction>.StartProtected(fun inbox ->
         let reply (resp : Response) = async {
             let message = 
-                sprintf ".@%s %s" resp.RecipientName resp.Message
-                |> trimToTweet resp.MediaIDs
+                sprintf ".%s %s" resp.SenderHandle resp.Reply
+                |> trimToTweet resp.MediaIds
 
-            do! context.ReplyAsync(resp.StatusID, message, resp.MediaIDs) 
+            do! context.ReplyAsync(resp.SenderMessageId, message, resp.MediaIds) 
                 |> Async.AwaitTask
                 |> Async.Ignore
         }
 
         let tweet (tweet : Tweet) = async {
-            let msg = trimToTweet tweet.MediaIDs tweet.Message
-            do! context.TweetAsync(msg, tweet.MediaIDs)
+            let msg = trimToTweet tweet.MediaIds tweet.Message
+            do! context.TweetAsync(msg, tweet.MediaIds)
                 |> Async.AwaitTask
                 |> Async.Ignore
         }
@@ -199,7 +319,7 @@ module Twitter =
 
             match action with
             | SendReply resp ->
-                logInfof "Posting reply to [@%s] : %s" resp.RecipientName resp.Message
+                logInfof "Posting reply to [%s] : %s" resp.SenderHandle resp.Reply
                 do! reply resp
             | Tweet t ->
                 logInfof "Sending new tweet : %s" t.Message

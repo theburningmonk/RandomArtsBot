@@ -123,11 +123,27 @@ module State =
         | true, x -> return Some (uint64 <| x.S)
         | _       -> return None
     }
+
+    let lastMessage (botname : string) = async {
+        let keys = Dictionary<string, AttributeValue>()
+        keys.["BotName"] <- new AttributeValue(botname)
+        let! res = dynamoDB.GetItemAsync(stateTable, keys, true) |> Async.AwaitTask
+        match res.Item.TryGetValue "LastMessage" with
+        | true, x -> return Some (uint64 <| x.S)
+        | _       -> return None
+    }
     
-    let updateLastMention (botname : string) (statusId : StatusID) = async {
+    let updateLastMention (botname : string) (statusId : Id) = async {
         let req = PutItemRequest(TableName = stateTable)
         req.Item.Add("BotName", new AttributeValue(botname))
         req.Item.Add("LastMention", new AttributeValue(string statusId))
+        do! dynamoDB.PutItemAsync req |> Async.AwaitTask |> Async.Ignore
+    }
+    
+    let updateLastMessage (botname : string) (msgId : Id) = async {
+        let req = PutItemRequest(TableName = stateTable)
+        req.Item.Add("BotName", new AttributeValue(botname))
+        req.Item.Add("LastMessage", new AttributeValue(string msgId))
         do! dynamoDB.PutItemAsync req |> Async.AwaitTask |> Async.Ignore
     }
 

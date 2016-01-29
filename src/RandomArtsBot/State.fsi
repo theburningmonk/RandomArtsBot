@@ -14,11 +14,17 @@ module State =
     /// add lines to an ongoing conversation with a recipient
     val addConvo : string -> seq<DateTime * Speaker * string> -> Async<unit>
 
+    /// returns the ID of the last DM that had been processed
+    val lastMessage : string -> Async<Id option>
+
+    /// updates the ID of the last DM that had been processed
+    val updateLastMessage : string -> Id -> Async<unit>
+
     /// returns the ID of the last mention that had been processed
-    val lastMention : string -> Async<StatusID option>
+    val lastMention : string -> Async<Id option>
 
     /// updates the ID of the last mention that had been processed
-    val updateLastMention : string -> StatusID -> Async<unit>
+    val updateLastMention : string -> Id -> Async<unit>
 
     /// atomically save an expr
     val atomicSave : Expr -> Async<bool>
