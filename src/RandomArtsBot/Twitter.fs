@@ -160,8 +160,7 @@ module Twitter =
     let uploadImageToImgur (image : Bitmap) = async {
         use stream = new MemoryStream()
         image.Save(stream, Imaging.ImageFormat.Png)
-        stream.Position <- 0L
-        return! imgurEndpoint.UploadImageStreamAsync(stream)
+        return! imgurEndpoint.UploadImageBinaryAsync(stream.ToArray())
                 |> Async.AwaitTask
     }
 
@@ -307,10 +306,13 @@ module Twitter =
                     |> Async.Parallel
                 let imgLinks = uploadedImgs |> Array.map (fun img -> img.Link)
                 let message =
-                    sprintf 
-                        "You queried:\n%s\nRendered image(s):%s" 
-                        resp.SenderMessage
-                        (String.Join("\n", imgLinks))
+                    match imgLinks with
+                    | [||] -> resp.Reply
+                    | _ -> 
+                        sprintf 
+                            "I rendered these image(s) for you:\n%s\nbased on your query:\n%s" 
+                            (String.Join("\n", imgLinks))
+                            resp.SenderMessage
                 do! context.NewDirectMessageAsync(resp.SenderHandle, message)
                     |> Async.AwaitTask
                     |> Async.Ignore
