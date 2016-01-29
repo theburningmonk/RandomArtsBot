@@ -11,9 +11,9 @@ module Generator =
     let logErrorf fmt = logErrorf logger fmt
 
     let (|GoodEnough|_|) random expr =
-        let path, bitmap = RandomArt.drawImage random expr
+        let bitmap = RandomArt.drawImage random expr
         if Critic.isGoodEnough bitmap 
-        then Some path
+        then Some bitmap
         else None
 
     let createTweet () = async {
@@ -26,8 +26,8 @@ module Generator =
                 logInfof "Generated expression :\n\t%O\n" expr
                 let! isNewExpr = State.atomicSave expr
                 match isNewExpr, expr with
-                | true, GoodEnough random path ->
-                    let! mediaId = Twitter.uploadImage path
+                | true, GoodEnough random bitmap ->
+                    let! mediaId = Twitter.uploadImage bitmap
                     let tweet : Tweet = 
                         {
                             Message  = expr.ToString()

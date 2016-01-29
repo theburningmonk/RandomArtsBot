@@ -381,11 +381,4 @@ module RandomArt =
 
     let parse text = tryParseExpr text
 
-    let drawImage random (expr : Expr) =
-        let image = drawWith (eval random expr) 1
-        let path  = 
-            Path.Combine(
-                Path.GetTempPath(), 
-                Path.GetTempFileName() + ".png")
-        image.Save(path)
-        path, image
+    let drawImage random (expr : Expr) = drawWith (eval random expr) 1

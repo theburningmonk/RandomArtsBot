@@ -8,6 +8,8 @@ NUGET
     AWSSDK.DynamoDBv2 (3.1.1.4)
       AWSSDK.Core (>= 3.1.4.3 < 3.2.0)
     FParsec (1.0.2)
+    Imgur.API (3.6.0)
+      Newtonsoft.Json (>= 8.0.1)
     linqtotwitter (3.1.2)
       Microsoft.Bcl (>= 1.1.9)
       Microsoft.Bcl.Build (>= 1.0.14)
@@ -30,6 +32,7 @@ NUGET
       Microsoft.Bcl (>= 1.1.10)
       Microsoft.Bcl.Build (>= 1.0.14)
     Mono.Security (3.2.3)
+    Newtonsoft.Json (8.0.2)
     PCLCrypto (1.0.86) - framework: portable-net45+win8+wp8+wpa81
       Mono.Security (>= 3.2.3.0 < 4.0) - framework: >= net40
       Validation (>= 2.0.6 < 3.0)

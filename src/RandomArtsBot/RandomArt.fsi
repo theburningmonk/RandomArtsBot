@@ -41,4 +41,4 @@ module RandomArt =
 
     /// Draws a random image using the given expression and returns
     /// the path to the image file and the Bitmap data
-    val drawImage : random:Random -> Expr -> string * Bitmap
+    val drawImage : random:Random -> Expr -> Bitmap

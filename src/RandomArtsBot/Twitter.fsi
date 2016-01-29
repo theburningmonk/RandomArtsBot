@@ -2,6 +2,7 @@
 
 module Twitter =
     open System
+    open System.Drawing
     open LinqToTwitter
 
     type Id      = uint64
@@ -19,23 +20,32 @@ module Twitter =
             Location       : string
         }
 
-    type Interaction =
-        | Mention of User * Id * Message * createdAt:DateTime
-        | DM      of User * Id * Message * createdAt:DateTime
-        | Retweet of User * Id * createdAt:DateTime
-        | Fav     of User * Id * createdAt:DateTime
+    type InteractionKind =
+        | Mention of Message
+        | DM      of Message
+        | Retweet
+        | Fav
 
-        member Id        : Id
-        member User      : User
-        member Timestamp : DateTime
+    type Interaction =
+        { 
+            Id        : Id
+            User      : User
+            CreatedAt : DateTime
+            Kind      : InteractionKind
+        }
+
+    type ResponseKind =
+        | Tweet
+        | DM
 
     type Response = 
         {
             SenderHandle    : string
             SenderMessage   : string
             SenderMessageId : Id
+            Kind            : ResponseKind
             Reply           : string
-            MediaIds        : Id list
+            Media           : (Bitmap * Id) list
         }
 
     type Tweet =
@@ -52,9 +62,9 @@ module Twitter =
     /// is not specified then all mentions are returned
     val pullMentions : sinceId:Id option -> Interaction list * nextId:Id option * TimeSpan
 
-    /// Uploads an image to Twitter by local path. Returns an Image ID that can
-    /// be included in a response message
-    val uploadImage : string -> Async<Id>
+    /// Uploads an image to Twitter. Returns an Image ID that can be included in a 
+    /// response message
+    val uploadImage : Bitmap -> Async<Id>
 
     /// Sends a response
     val send : Response -> Async<unit>

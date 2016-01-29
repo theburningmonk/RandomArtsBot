@@ -87,44 +87,58 @@ module Responder =
         return mentions, nextId, delay
     }
 
+    let getMessages botname sinceId = async {
+        logInfof "[%s] Checking for new DMs..." botname
+        let mentions, nextId, delay = Twitter.pullDMs sinceId
+
+        match mentions with
+        | [] -> logInfof "[%s] No new DMs." botname
+        | _  -> logInfof "[%s] Found %d new DMs." botname mentions.Length
+
+        return mentions, nextId, delay
+    }
+
     let createResponse (interaction : Interaction) = async {
         logInfof "Responding to [%O]" interaction
 
-        let createResp msg reply mediaIds =
+        let responseKind = 
+            match interaction.Kind with
+            | InteractionKind.DM _ -> ResponseKind.DM
+            | _                    -> ResponseKind.Tweet
+
+        let createResp msg reply media =
             {
                 SenderHandle    = interaction.User.Handle
                 SenderMessage   = msg
                 SenderMessageId = interaction.Id
+                Kind            = responseKind
                 Reply           = reply
-                MediaIds        = mediaIds
+                Media           = media
             }
 
-        match interaction with
-        | Retweet _ | Fav _ -> 
+        match interaction.Kind with
+        | Retweet | Fav -> 
             return None
-        | Mention (_, _, (Help as msg), _) 
-        | DM (_, _, (Help as msg), _) -> 
+        | Mention (Help as msg) | InteractionKind.DM (Help as msg) -> 
             let reply = "Thank you for your interest, plz see doc : http://theburningmonk.github.io/RandomArtsBot"
             return Some <| createResp msg reply []
-        | Mention (user, _, Other msg, _) 
-        | DM (user, _, Other msg, _) -> 
-            let! keepTalking = shouldKeepTalking user.Handle msg
+        | Mention (Other msg) | InteractionKind.DM (Other msg) -> 
+            let! keepTalking = shouldKeepTalking interaction.User.Handle msg
             if not keepTalking then
                 logInfof "mm.. suspicious conversation, let's stop talking"
                 return None
             else
                 let reply = "Thank you for your attention :-)"
                 return Some <| createResp msg reply []
-        | Mention (_, _, (Query expr as msg), _) 
-        | DM (_, _, (Query expr as msg), _) -> 
+        | Mention (Query expr as msg) | InteractionKind.DM (Query expr as msg) -> 
             let random   = new Random(int DateTime.UtcNow.Ticks)
-            let path, _  = RandomArt.drawImage random expr
-            let! mediaId = Twitter.uploadImage path
+            let bitmap   = RandomArt.drawImage random expr
+            let! mediaId = Twitter.uploadImage bitmap
             let reply    = "here you go"
-            return Some <| createResp msg reply [ mediaId ]
-        | Mention (user, _, (InvalidQuery err as msg), _) 
-        | DM (user, _, (InvalidQuery err as msg), _) -> 
-            let! keepTalking = shouldKeepTalking user.Handle msg
+            return Some <| createResp msg reply [ bitmap, mediaId ]
+        | Mention (InvalidQuery err as msg) 
+        | InteractionKind.DM (InvalidQuery err as msg) -> 
+            let! keepTalking = shouldKeepTalking interaction.User.Handle msg
             if not keepTalking then
                 logInfof "mm.. suspicious conversation, let's stop talking"
                 return None
@@ -133,35 +147,39 @@ module Responder =
                 return Some <| createResp msg reply []
     }
 
-    let rec loop botname sinceId = async {
-        let! mentions, nextId, delay = getMentions botname sinceId
+    let rec loop 
+            (getInteractions : Id option -> Async<Interaction list * Id option * TimeSpan>) 
+            (updateLast : Id -> Async<unit>)
+            (sinceId : Id option) = async {
+        let! interactions, nextId, delay = getInteractions sinceId
 
         match nextId with
-        | Some id -> do! State.updateLastMention botname id
+        | Some id -> do! updateLast id
         | _ -> ()
       
-        for mention in mentions do
-            let! response = createResponse mention
+        for interaction in interactions do
+            let! response = createResponse interaction
             match response with
             | Some x -> 
                 do! Twitter.send x
                 do! State.addConvo 
-                        mention.User.Handle 
-                        [ mention.Timestamp, Them, x.SenderMessage
+                        interaction.User.Handle 
+                        [ interaction.CreatedAt, Them, x.SenderMessage
                           DateTime.UtcNow, Us, x.Reply ]
             | _ ->
-                match mention with
-                | Mention (_, _, msg, _) ->
+                match interaction.Kind with
+                | Mention msg
+                | InteractionKind.DM msg ->
                     do! State.addConvo
-                            mention.User.Handle
-                            [ mention.Timestamp, Them, msg ]
+                            interaction.User.Handle
+                            [ interaction.CreatedAt, Them, msg ]
                 | _ -> ()
 
-            do! Twitter.follow mention.User.Id
+            do! Twitter.follow interaction.User.Id
 
         do! Async.Sleep (int delay.TotalMilliseconds)
 
-        return! loop botname nextId
+        return! loop getInteractions updateLast nextId
     }
 
     let start botname = 
@@ -170,8 +188,25 @@ module Responder =
         | Some id -> logInfof "Last mention : %d" id
         | _       -> logInfof "NO last mention found"
 
+        let getMentions = getMentions botname
+        let updateLastMention = State.updateLastMention botname
+
         Async.StartProtected(
-            loop botname lastMention,
+            loop getMentions updateLastMention lastMention,
             fun exn -> logErrorf "%A" exn)
 
         logInfof "Started loop to poll and respond to new mentions"
+
+        let lastMessage = State.lastMessage botname |> Async.RunSynchronously
+        match lastMessage with
+        | Some id -> logInfof "Last message : %d" id
+        | _       -> logInfof "NO last message found"
+        
+        let getMessages = getMessages botname
+        let updateLastMessage = State.updateLastMessage botname
+
+        Async.StartProtected(
+            loop getMessages updateLastMessage lastMessage,
+            fun exn -> logErrorf "%A" exn)
+
+        logInfof "Started loop to poll and respond to new DMs"

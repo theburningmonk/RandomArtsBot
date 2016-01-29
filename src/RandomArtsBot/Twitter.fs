@@ -7,6 +7,8 @@ module Twitter =
     open System.IO
     open System.Text.RegularExpressions
 
+    open Imgur.API.Authentication.Impl
+    open Imgur.API.Endpoints.Impl
     open LinqToTwitter
     open log4net
 
@@ -54,62 +56,64 @@ module Twitter =
                 Location       = dm.Sender.Location
             }
 
+    type InteractionKind =
+        | Mention of Message
+        | DM      of Message
+        | Retweet
+        | Fav
+
     type Interaction =
-        | Mention of User * Id * Message * createdAt:DateTime
-        | DM      of User * Id * Message * createdAt:DateTime
-        | Retweet of User * Id * createdAt:DateTime
-        | Fav     of User * Id * createdAt:DateTime
-
-        member x.Id =
-            match x with
-            | Mention (_, id, _, _)
-            | DM (_, id, _, _)
-            | Retweet (_, id, _)
-            | Fav (_, id, _) -> id
-
-        member x.User =
-            match x with
-            | Mention (user, _, _, _)
-            | DM (user, _, _, _)
-            | Retweet (user, _, _)
-            | Fav (user, _, _) -> user
-
-        member x.Timestamp =
-            match x with
-            | Mention (_, _, _, dt)
-            | DM (_, _, _, dt)
-            | Retweet (_, _, dt)
-            | Fav (_, _, dt) -> dt
+        { 
+            Id        : Id
+            User      : User
+            CreatedAt : DateTime
+            Kind      : InteractionKind
+        }
 
         override x.ToString() =
-            match x with
-            | Mention (user, id, msg, _) -> 
-                sprintf "Mention by %s [%s] [%d]" user.Handle msg id
-            | DM (user, id, msg, _) ->
-                sprintf "DM by %s [%s] [%d]" user.Handle msg id
-            | Retweet (user, _, _) ->
-                sprintf "Retweet by %s" user.Handle
-            | Fav (user, _, _) ->
-                sprintf "Fav by %s" user.Handle
+            match x.Kind with
+            | Mention msg -> 
+                sprintf "Mention by %s [%s] [%d]" x.User.Handle msg x.Id
+            | DM msg ->
+                sprintf "DM by %s [%s] [%d]" x.User.Handle msg x.Id
+            | Retweet ->
+                sprintf "Retweet by %s" x.User.Handle
+            | Fav ->
+                sprintf "Fav by %s" x.User.Handle
 
         static member Of (status : Status) =
             match status.Type with
-            | StatusType.Mentions -> 
-                Mention (User.Of status, status.StatusID, normalize status.Text, status.CreatedAt)
+            | StatusType.Mentions -> Mention <| normalize status.Text
             | StatusType.Retweets 
-            | StatusType.RetweetsOfMe ->
-                Retweet (User.Of status, status.StatusID, status.CreatedAt)
+            | StatusType.RetweetsOfMe -> Retweet
+            |> (fun kind -> 
+                {
+                    Id = status.StatusID
+                    User = User.Of status
+                    CreatedAt = status.CreatedAt
+                    Kind = kind
+                })
 
         static member Of (dm : DirectMessage) =
-            DM (User.Of dm, dm.ID, normalize dm.Text, dm.CreatedAt)
+            {
+                Id = dm.IDResponse
+                User = User.Of dm
+                CreatedAt = dm.CreatedAt
+                Kind = DM <| normalize dm.Text
+            }
+
+    type ResponseKind =
+        | Tweet
+        | DM
 
     type Response = 
         {
             SenderHandle    : string
             SenderMessage   : string
             SenderMessageId : Id
+            Kind            : ResponseKind
             Reply           : string
-            MediaIds        : Id list
+            Media           : (Bitmap * Id) list
         }
 
     type Tweet =
@@ -147,6 +151,19 @@ module Twitter =
         authorizer.CredentialStore    <- credentials
 
         new TwitterContext(authorizer)
+
+    let imgurClientId     = appSettings.["imgurClientId"]
+    let imgurClientSecret = appSettings.["imgurClientSecret"]
+    let imgurClient   = new ImgurClient(imgurClientId, imgurClientSecret);
+    let imgurEndpoint = new ImageEndpoint(imgurClient);
+
+    let uploadImageToImgur (image : Bitmap) = async {
+        use stream = new MemoryStream()
+        image.Save(stream, Imaging.ImageFormat.Png)
+        stream.Position <- 0L
+        return! imgurEndpoint.UploadImageStreamAsync(stream)
+                |> Async.AwaitTask
+    }
 
     (* Handling Twitter rate limits: 
        context.RateLimit... gives us information on rate limits that apply to 
@@ -212,7 +229,7 @@ module Twitter =
                 query { 
                     for dm in context.DirectMessage do 
                     where (dm.Type = DirectMessageType.SentTo && dm.SinceID = id)
-                    where (dm.ID <> id)
+                    where (dm.IDResponse <> id)
                     select dm
                 }
             |> Seq.toList
@@ -223,7 +240,7 @@ module Twitter =
         let nextId =
             match messages with
             | []  -> sinceId
-            | lst -> lst |> Seq.map (fun s -> s.ID) |> Seq.max |> Some
+            | lst -> lst |> Seq.map (fun s -> s.IDResponse) |> Seq.max |> Some
 
         messages |> List.map Interaction.Of, nextId, wait
 
@@ -270,17 +287,33 @@ module Twitter =
     type TwitterAction =
         | SendReply   of Response
         | Tweet       of Tweet
-        | UploadImage of filepath:string * AsyncReplyChannel<Id>
+        | UploadImage of Bitmap * AsyncReplyChannel<Id>
 
     let twitterAgent = Agent<TwitterAction>.StartProtected(fun inbox ->
         let reply (resp : Response) = async {
-            let message = 
-                sprintf ".%s %s" resp.SenderHandle resp.Reply
-                |> trimToTweet resp.MediaIds
-
-            do! context.ReplyAsync(resp.SenderMessageId, message, resp.MediaIds) 
-                |> Async.AwaitTask
-                |> Async.Ignore
+            match resp.Kind with
+            | ResponseKind.Tweet -> 
+                let mediaIds = resp.Media |> List.map snd
+                let message = 
+                    sprintf ".%s %s" resp.SenderHandle resp.Reply
+                    |> trimToTweet mediaIds
+                do! context.ReplyAsync(resp.SenderMessageId, message, mediaIds)
+                    |> Async.AwaitTask
+                    |> Async.Ignore
+            | ResponseKind.DM -> 
+                let! uploadedImgs =
+                    resp.Media 
+                    |> List.map (fun (bitmap, _) -> uploadImageToImgur bitmap)
+                    |> Async.Parallel
+                let imgLinks = uploadedImgs |> Array.map (fun img -> img.Link)
+                let message =
+                    sprintf 
+                        "You queried:\n%s\nRendered image(s):%s" 
+                        resp.SenderMessage
+                        (String.Join("\n", imgLinks))
+                do! context.NewDirectMessageAsync(resp.SenderHandle, message)
+                    |> Async.AwaitTask
+                    |> Async.Ignore
         }
 
         let tweet (tweet : Tweet) = async {
@@ -290,12 +323,9 @@ module Twitter =
                 |> Async.Ignore
         }
 
-        let upload (path : string) = async {
-            logInfof "Uploading image from %s" path
-
-            use img    = Image.FromFile(path)
+        let upload (bitmap : Bitmap) = async {
             use stream = new MemoryStream()
-            img.Save(stream, Imaging.ImageFormat.Png)
+            bitmap.Save(stream, Imaging.ImageFormat.Png)
           
             let! media = 
                 stream.ToArray ()
@@ -305,11 +335,6 @@ module Twitter =
             logInfof "Media uploaded with ID %i" media.MediaID
 
             logCurrentLimits ()
-
-            img.Dispose ()
-            File.Delete path
-
-            logInfof "Deleted file from %s" path
 
             return media.MediaID
         }
@@ -324,9 +349,9 @@ module Twitter =
             | Tweet t ->
                 logInfof "Sending new tweet : %s" t.Message
                 do! tweet t
-            | UploadImage (path, replyChannel) ->
-                let! mediaID = upload path
-                replyChannel.Reply mediaID
+            | UploadImage (bitmap, replyChannel) ->
+                let! mediaId = upload bitmap
+                replyChannel.Reply mediaId
 
             logCurrentLimits ()
 
@@ -341,9 +366,9 @@ module Twitter =
 
         loop ())
 
-    let uploadImage path = async {
+    let uploadImage bitmap = async {
         let! mediaId = 
-            twitterAgent.PostAndAsyncReply (fun reply -> UploadImage(path, reply))
+            twitterAgent.PostAndAsyncReply (fun reply -> UploadImage(bitmap, reply))
         return mediaId
     }
 

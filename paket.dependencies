@@ -1,6 +1,7 @@
 source https://nuget.org/api/v2
 nuget AWSSDK.DynamoDBv2
 nuget FParsec
+nuget imgur.api
 nuget LinqToTwitter
 nuget log4net
 nuget TopShelf

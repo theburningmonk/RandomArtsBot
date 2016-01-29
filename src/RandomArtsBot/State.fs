@@ -134,17 +134,25 @@ module State =
     }
     
     let updateLastMention (botname : string) (statusId : Id) = async {
-        let req = PutItemRequest(TableName = stateTable)
-        req.Item.Add("BotName", new AttributeValue(botname))
-        req.Item.Add("LastMention", new AttributeValue(string statusId))
-        do! dynamoDB.PutItemAsync req |> Async.AwaitTask |> Async.Ignore
+        let req = UpdateItemRequest(TableName = stateTable)
+        req.Key.Add("BotName", new AttributeValue(botname))
+        req.AttributeUpdates.Add(
+            "LastMention", 
+            new AttributeValueUpdate(
+                new AttributeValue(string statusId),
+                AttributeAction.PUT))
+        do! dynamoDB.UpdateItemAsync req |> Async.AwaitTask |> Async.Ignore
     }
     
     let updateLastMessage (botname : string) (msgId : Id) = async {
-        let req = PutItemRequest(TableName = stateTable)
-        req.Item.Add("BotName", new AttributeValue(botname))
-        req.Item.Add("LastMessage", new AttributeValue(string msgId))
-        do! dynamoDB.PutItemAsync req |> Async.AwaitTask |> Async.Ignore
+        let req = UpdateItemRequest(TableName = stateTable)
+        req.Key.Add("BotName", new AttributeValue(botname))
+        req.AttributeUpdates.Add(
+            "LastMessage", 
+            new AttributeValueUpdate(
+                new AttributeValue(string msgId),
+                AttributeAction.PUT))
+        do! dynamoDB.UpdateItemAsync req |> Async.AwaitTask |> Async.Ignore
     }
 
     let atomicSave (expr : Expr) = async {

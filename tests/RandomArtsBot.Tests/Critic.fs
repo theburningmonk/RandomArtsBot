@@ -17,6 +17,6 @@ module ``Critic tests`` =
         let random = new Random(int DateTime.UtcNow.Ticks)
 
         let (Choice1Of2 expr) = parse input
-        let _, bitmap = drawImage random expr
+        let bitmap = drawImage random expr
 
         isGoodEnough bitmap |> should be False
