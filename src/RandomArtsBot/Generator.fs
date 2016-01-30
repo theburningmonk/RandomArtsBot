@@ -2,16 +2,22 @@
 
 open System
 open log4net
-open Twitter
 open Extensions
 
-module Generator =
-    let logger = LogManager.GetLogger "Generator"
+type IGenerator =
+    /// Starts a loop to generate random images periodically
+    abstract member Start : freqMs:int -> unit
+
+type Generator 
+        (twitter : ITwitterClient, 
+         artist  : IArtist,
+         state   : IState) =
+    let logger = LogManager.GetLogger(typeof<Generator>)
     let logInfof fmt  = logInfof logger fmt
     let logErrorf fmt = logErrorf logger fmt
 
     let (|GoodEnough|_|) random expr =
-        let bitmap = RandomArt.drawImage random expr
+        let bitmap = artist.DrawImage(random, expr)
         if Critic.isGoodEnough bitmap 
         then Some bitmap
         else None
@@ -22,12 +28,12 @@ module Generator =
 
             if n = 0 then return None
             else
-                let expr = RandomArt.genExpr random 6
+                let expr = artist.GenExpr(random, 6)
                 logInfof "Generated expression :\n\t%O\n" expr
-                let! isNewExpr = State.atomicSave expr
+                let! isNewExpr = state.AtomicSave expr
                 match isNewExpr, expr with
                 | true, GoodEnough random bitmap ->
-                    let! mediaId = Twitter.uploadImage bitmap
+                    let! mediaId = twitter.UploadImage bitmap
                     let tweet : Tweet = 
                         {
                             Message  = expr.ToString()
@@ -44,7 +50,7 @@ module Generator =
         let! tweet = createTweet ()
         match tweet with
         | Some x -> 
-            do! Twitter.tweet x
+            do! twitter.Tweet x
             logInfof "Published new tweet :\n\t%s\n" x.Message
         | _      -> ()
 
@@ -59,3 +65,6 @@ module Generator =
             fun exn -> logErrorf "%A" exn)
 
         logInfof "started loop to generate random images every [%d] ms" freqMs
+
+    interface IGenerator with
+        member __.Start freqMs = start freqMs

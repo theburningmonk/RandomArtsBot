@@ -1,5 +1,10 @@
 ﻿namespace RandomArtsBot
 
-module Responder =
+type IResponder =
     /// Starts a loop to keep polling for new mentions and responding to them
-    val start : botname:string -> unit
+    abstract member Start : botname:string -> unit
+
+type Responder =
+    new : ITwitterClient * IArtist * IState -> Responder
+
+    interface IResponder

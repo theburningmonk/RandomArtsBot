@@ -1,86 +1,143 @@
 namespace RandomArtsBot
 
-module Twitter =
-    open System
-    open System.Configuration
-    open System.Drawing
-    open System.IO
-    open System.Text.RegularExpressions
+open System
+open System.Configuration
+open System.Drawing
+open System.IO
+open System.Text.RegularExpressions
 
-    open Imgur.API.Authentication.Impl
-    open Imgur.API.Endpoints.Impl
-    open LinqToTwitter
-    open log4net
+open Imgur.API.Authentication.Impl
+open Imgur.API.Endpoints.Impl
+open LinqToTwitter
+open log4net
 
-    type Id      = uint64
-    type Message = string
+type Id      = uint64
+type Message = string
 
+type User =
+    {
+        Id             : Id
+        Name           : string
+        Handle         : string
+        Description    : string
+        FollowersCount : int
+        FriendsCount   : int
+        FavoritesCount : int
+        Location       : string
+    }
+
+    static member Of (status : Status) =
+        {
+            Id     = uint64 status.User.UserIDResponse
+            Name   = status.User.Name 
+            Handle = "@" + status.User.ScreenNameResponse
+            Description    = status.User.Description 
+            FollowersCount = status.User.FollowersCount
+            FriendsCount   = status.User.FriendsCount
+            FavoritesCount = status.User.FavoritesCount
+            Location       = status.User.Location
+        }
+
+    static member Of (dm : DirectMessage) =
+        {
+            Id     = uint64 dm.Sender.UserIDResponse
+            Name   = dm.Sender.Name 
+            Handle = "@" + dm.Sender.ScreenNameResponse
+            Description    = dm.Sender.Description 
+            FollowersCount = dm.Sender.FollowersCount
+            FriendsCount   = dm.Sender.FriendsCount
+            FavoritesCount = dm.Sender.FavoritesCount
+            Location       = dm.Sender.Location
+        }
+
+type InteractionKind =
+    | Mention of Message
+    | DM      of Message
+    | Retweet
+    | Fav
+
+type Interaction =
+    { 
+        Id        : Id
+        User      : User
+        CreatedAt : DateTime
+        Kind      : InteractionKind
+    }
+
+    override x.ToString() =
+        match x.Kind with
+        | Mention msg -> 
+            sprintf "Mention by %s [%s] [%d]" x.User.Handle msg x.Id
+        | DM msg ->
+            sprintf "DM by %s [%s] [%d]" x.User.Handle msg x.Id
+        | Retweet ->
+            sprintf "Retweet by %s" x.User.Handle
+        | Fav ->
+            sprintf "Fav by %s" x.User.Handle
+
+type ResponseKind =
+    | Tweet
+    | DM
+
+type Response = 
+    {
+        SenderHandle    : string
+        SenderMessage   : string
+        SenderMessageId : Id
+        Kind            : ResponseKind
+        Reply           : string
+        Media           : (Bitmap * Id) list
+    }
+
+type Tweet =
+    {
+        Message  : string
+        MediaIds : Id list
+    }
+
+type TwitterAction =
+    | SendReply   of Response
+    | Tweet       of Tweet
+    | UploadImage of Bitmap * AsyncReplyChannel<Id>
+
+type ITwitterClient =
+    /// Returns a list of new DMs since the specified `sinceId`. If `sinceId` is
+    /// not specified then all DMs are returned
+    abstract member PullDMs : sinceId:Id option -> Interaction list * nextId:Id option * TimeSpan
+
+    /// Returns a list of new mentions since the specified `sinceId`. If `sinceId`
+    /// is not specified then all mentions are returned
+    abstract member PullMentions : sinceId:Id option -> Interaction list * nextId:Id option * TimeSpan
+
+    /// Uploads an image to Twitter. Returns an Image ID that can be included in a 
+    /// response message
+    abstract member UploadImage : Bitmap -> Async<Id>
+
+    /// Sends a response
+    abstract member Send : Response -> Async<unit>
+
+    /// Tweets a new tweet
+    abstract member Tweet : Tweet -> Async<unit>
+
+    /// Follows a twitter user
+    abstract member Follow : Id -> Async<unit>
+
+[<AutoOpen>]
+module private Utilities =
     let twitterHandleRegex = Regex("@[a-z0-9_]{1,15}")
 
     let normalize (text : string) = 
         twitterHandleRegex.Replace(text.ToLower(), "").Trim()
 
-    type User =
-        {
-            Id             : Id
-            Name           : string
-            Handle         : string
-            Description    : string
-            FollowersCount : int
-            FriendsCount   : int
-            FavoritesCount : int
-            Location       : string
-        }
+    // Twitter uses Unix time; let's convert to DateTime    
+    let unixEpoch = DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+    let fromUnix (unixTime : int) =
+        unixTime
+        |> float
+        |> TimeSpan.FromSeconds
+        |> unixEpoch.Add
 
-        static member Of (status : Status) =
-            {
-                Id     = uint64 status.User.UserIDResponse
-                Name   = status.User.Name 
-                Handle = "@" + status.User.ScreenNameResponse
-                Description    = status.User.Description 
-                FollowersCount = status.User.FollowersCount
-                FriendsCount   = status.User.FriendsCount
-                FavoritesCount = status.User.FavoritesCount
-                Location       = status.User.Location
-            }
-
-        static member Of (dm : DirectMessage) =
-            {
-                Id     = uint64 dm.Sender.UserIDResponse
-                Name   = dm.Sender.Name 
-                Handle = "@" + dm.Sender.ScreenNameResponse
-                Description    = dm.Sender.Description 
-                FollowersCount = dm.Sender.FollowersCount
-                FriendsCount   = dm.Sender.FriendsCount
-                FavoritesCount = dm.Sender.FavoritesCount
-                Location       = dm.Sender.Location
-            }
-
-    type InteractionKind =
-        | Mention of Message
-        | DM      of Message
-        | Retweet
-        | Fav
-
-    type Interaction =
-        { 
-            Id        : Id
-            User      : User
-            CreatedAt : DateTime
-            Kind      : InteractionKind
-        }
-
-        override x.ToString() =
-            match x.Kind with
-            | Mention msg -> 
-                sprintf "Mention by %s [%s] [%d]" x.User.Handle msg x.Id
-            | DM msg ->
-                sprintf "DM by %s [%s] [%d]" x.User.Handle msg x.Id
-            | Retweet ->
-                sprintf "Retweet by %s" x.User.Handle
-            | Fav ->
-                sprintf "Fav by %s" x.User.Handle
-
+    type Interaction with
         static member Of (status : Status) =
             match status.Type with
             | StatusType.Mentions -> Mention <| normalize status.Text
@@ -99,39 +156,8 @@ module Twitter =
                 Id = dm.IDResponse
                 User = User.Of dm
                 CreatedAt = dm.CreatedAt
-                Kind = DM <| normalize dm.Text
+                Kind = InteractionKind.DM <| normalize dm.Text
             }
-
-    type ResponseKind =
-        | Tweet
-        | DM
-
-    type Response = 
-        {
-            SenderHandle    : string
-            SenderMessage   : string
-            SenderMessageId : Id
-            Kind            : ResponseKind
-            Reply           : string
-            Media           : (Bitmap * Id) list
-        }
-
-    type Tweet =
-        {
-            Message  : string
-            MediaIds : Id list
-        }
-
-    let logger = LogManager.GetLogger "Twitter"
-    let logInfof fmt = logInfof logger fmt
-
-    // Twitter uses Unix time; let's convert to DateTime    
-    let unixEpoch = DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
-    let fromUnix (unixTime : int) =
-        unixTime
-        |> float
-        |> TimeSpan.FromSeconds
-        |> unixEpoch.Add
     
     let appSettings = ConfigurationManager.AppSettings
 
@@ -164,14 +190,19 @@ module Twitter =
                 |> Async.AwaitTask
     }
 
+type TwitterClient () =
+    let logger = LogManager.GetLogger(typeof<TwitterClient>)
+    let logInfof fmt  = logInfof logger fmt
+    let logWarnf fmt  = logWarnf logger fmt
+    let logErrorf fmt = logErrorf logger fmt
+
     (* Handling Twitter rate limits: 
-       context.RateLimit... gives us information on rate limits that apply to 
-       the previous call we made. 
-       If we have some rate left, just wait for the average time allowed between 
-       calls, otherwise, wait until the next rate limit reset time.
+        context.RateLimit... gives us information on rate limits that apply to 
+        the previous call we made. 
+        If we have some rate left, just wait for the average time allowed between 
+        calls, otherwise, wait until the next rate limit reset time.
     *)
 
-    // small utility to check how rates work
     let prettyTime (unixTime : int) = 
         (unixTime |> fromUnix).ToShortTimeString()
 
@@ -281,13 +312,6 @@ module Twitter =
         then msg.Substring(0, maxLen-6) + " [...]"
         else msg
 
-    type Agent<'T> = MailboxProcessor<'T>
-
-    type TwitterAction =
-        | SendReply   of Response
-        | Tweet       of Tweet
-        | UploadImage of Bitmap * AsyncReplyChannel<Id>
-
     let twitterAgent = Agent<TwitterAction>.StartProtected(fun inbox ->
         let reply (resp : Response) = async {
             match resp.Kind with
@@ -335,9 +359,6 @@ module Twitter =
                 |> Async.AwaitTask
 
             logInfof "Media uploaded with ID %i" media.MediaID
-
-            logCurrentLimits ()
-
             return media.MediaID
         }
 
@@ -368,10 +389,17 @@ module Twitter =
 
         loop ())
 
-    let uploadImage bitmap = async {
-        let! mediaId = 
-            twitterAgent.PostAndAsyncReply (fun reply -> UploadImage(bitmap, reply))
-        return mediaId
+    let rec uploadImage bitmap = async {
+        let! result = 
+            twitterAgent.PostAndAsyncReply
+                ((fun reply -> UploadImage(bitmap, reply)), 
+                    30000)
+            |> Async.Catch
+        match result with
+        | Choice1Of2 mediaId -> return mediaId
+        | Choice2Of2 exn ->
+            logWarnf "caught exception whilst uploading image to twitter\n%A" exn
+            return! uploadImage bitmap
     }
 
     let send response = async {
@@ -387,3 +415,11 @@ module Twitter =
             let! user = context.CreateFriendshipAsync(userId, true) |> Async.AwaitTask
             logInfof "Followed user %s" <| user.PrettyPrint()
     }
+
+    interface ITwitterClient with
+        member __.PullDMs sinceId      = pullDMs sinceId
+        member __.PullMentions sinceId = pullMentions sinceId
+        member __.UploadImage image    = uploadImage image
+        member __.Send response = send response
+        member __.Tweet message = tweet message
+        member __.Follow userId = follow userId

@@ -3,10 +3,93 @@
 open System
 open System.IO
 
-open RandomArt
-open Twitter
+open Amazon.DynamoDBv2
+open Amazon.DynamoDBv2.Model
+open System.Collections.Generic
 
-module State =
+type Speaker = 
+    | Us | Them
+
+    static member Parse = function
+        | "us"   -> Us
+        | "them" -> Them
+
+    override x.ToString() =
+        match x with
+        | Us   -> "us"
+        | Them -> "them"
+
+type IState =
+    /// returns the converstions with this recipient so far
+    abstract member GetConvo : string -> Async<seq<DateTime * Speaker * string>>
+
+    /// add lines to an ongoing conversation with a recipient
+    abstract member AddConvo : string * seq<DateTime * Speaker * string> -> Async<unit>
+
+    /// returns the ID of the last DM that had been processed
+    abstract member LastMessage : string -> Async<Id option>
+
+    /// updates the ID of the last DM that had been processed
+    abstract member UpdateLastMessage : string * Id -> Async<unit>
+
+    /// returns the ID of the last mention that had been processed
+    abstract member LastMention : string -> Async<Id option>
+
+    /// updates the ID of the last mention that had been processed
+    abstract member UpdateLastMention : string * Id -> Async<unit>
+
+    /// atomically save an expr
+    abstract member AtomicSave : Expr -> Async<bool>
+
+[<AutoOpen>]
+module DynamoDBUtils =
+    let dynamoDB   = new AmazonDynamoDBClient()
+    let stateTable = "RandomArtsBot.State"
+    let exprsTable = "RandomArtsBot.PublishedExprs"
+
+    let listAllTables () =
+        let rec loop lastTableName = seq {
+            let req = ListTablesRequest()
+            if not <| isNull lastTableName then
+                req.ExclusiveStartTableName <- lastTableName
+
+            let res = dynamoDB.ListTables req
+            yield! res.TableNames
+
+            if not <| isNull res.LastEvaluatedTableName then
+                yield! loop res.LastEvaluatedTableName
+        }
+
+        loop null
+
+    let init () =
+        let tableNames = 
+            listAllTables () 
+            |> Seq.map (fun x -> x.ToLower())
+            |> Set.ofSeq
+
+        let stateTableExists = tableNames.Contains <| stateTable.ToLower()
+        let exprsTableExists = tableNames.Contains <| exprsTable.ToLower()
+
+        if not stateTableExists then
+            let req = CreateTableRequest(TableName = stateTable)
+            req.KeySchema.Add(new KeySchemaElement("BotName", KeyType.HASH))
+            req.ProvisionedThroughput <- new ProvisionedThroughput(1L, 1L)
+            req.AttributeDefinitions.Add(
+                new AttributeDefinition("BotName", ScalarAttributeType.S))
+
+            dynamoDB.CreateTable req |> ignore
+
+        if not exprsTableExists then
+            let req = CreateTableRequest(TableName = exprsTable)
+            req.KeySchema.Add(new KeySchemaElement("Expr", KeyType.HASH))
+            req.ProvisionedThroughput <- new ProvisionedThroughput(1L, 1L)
+            req.AttributeDefinitions.Add(
+                new AttributeDefinition("Expr", ScalarAttributeType.S))
+
+            dynamoDB.CreateTable req |> ignore
+
+type State () =
     let datetimeFormat = "yyyyMMdd HH:mm:ss"
 
     let appData = 
@@ -24,18 +107,6 @@ module State =
     // conversation history for each recipient
     let convoFolder = Path.Combine(stateFolder, "conversations")
     do createIfNotExists convoFolder
-
-    type Speaker = 
-        | Us | Them
-
-        static member Parse = function
-            | "us"   -> Us
-            | "them" -> Them
-
-        override x.ToString() =
-            match x with
-            | Us   -> "us"
-            | Them -> "them"
 
     let getConvo recipientName = async {
         let path = Path.Combine(convoFolder, recipientName)
@@ -60,60 +131,6 @@ module State =
                 sprintf "%s,%O,%s" (dt.ToString(datetimeFormat)) s msg)
         File.AppendAllLines(path, lines)
     }
-
-    open Amazon.DynamoDBv2
-    open Amazon.DynamoDBv2.Model
-    open System.Collections.Generic
-
-    let dynamoDB   = new AmazonDynamoDBClient()
-    let stateTable = "RandomArtsBot.State"
-    let exprsTable = "RandomArtsBot.PublishedExprs"
-
-    [<AutoOpen>]
-    module DynamoDBUtils =
-        let listAllTables () =
-            let rec loop lastTableName = seq {
-                let req = ListTablesRequest()
-                if not <| isNull lastTableName then
-                    req.ExclusiveStartTableName <- lastTableName
-
-                let res = dynamoDB.ListTables req
-                yield! res.TableNames
-
-                if not <| isNull res.LastEvaluatedTableName then
-                    yield! loop res.LastEvaluatedTableName
-            }
-
-            loop null
-
-        let init () =
-            let tableNames = 
-                listAllTables () 
-                |> Seq.map (fun x -> x.ToLower())
-                |> Set.ofSeq
-
-            let stateTableExists = tableNames.Contains <| stateTable.ToLower()
-            let exprsTableExists = tableNames.Contains <| exprsTable.ToLower()
-
-            if not stateTableExists then
-                let req = CreateTableRequest(TableName = stateTable)
-                req.KeySchema.Add(new KeySchemaElement("BotName", KeyType.HASH))
-                req.ProvisionedThroughput <- new ProvisionedThroughput(1L, 1L)
-                req.AttributeDefinitions.Add(
-                    new AttributeDefinition("BotName", ScalarAttributeType.S))
-
-                dynamoDB.CreateTable req |> ignore
-
-            if not exprsTableExists then
-                let req = CreateTableRequest(TableName = exprsTable)
-                req.KeySchema.Add(new KeySchemaElement("Expr", KeyType.HASH))
-                req.ProvisionedThroughput <- new ProvisionedThroughput(1L, 1L)
-                req.AttributeDefinitions.Add(
-                    new AttributeDefinition("Expr", ScalarAttributeType.S))
-
-                dynamoDB.CreateTable req |> ignore
-    
-    do DynamoDBUtils.init ()
 
     let lastMention (botname : string) = async {
         let keys = Dictionary<string, AttributeValue>()
@@ -172,3 +189,14 @@ module State =
         | Choice1Of2 _ -> return true
         |_             -> return false
     } 
+    
+    do DynamoDBUtils.init ()
+
+    interface IState with
+        member __.GetConvo sender = getConvo sender
+        member __.AddConvo (sender, convo) = addConvo sender convo
+        member __.LastMessage botname = lastMessage botname
+        member __.UpdateLastMessage (botname, id) = updateLastMessage botname id
+        member __.LastMention botname = lastMention botname
+        member __.UpdateLastMention (botname, id) = updateLastMention botname id
+        member __.AtomicSave expr = atomicSave expr

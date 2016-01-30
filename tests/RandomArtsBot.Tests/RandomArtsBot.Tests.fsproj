@@ -60,6 +60,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Extensions.fs" />
+    <Compile Include="Twitter.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Critic.fs" />
     <Content Include="App.config" />

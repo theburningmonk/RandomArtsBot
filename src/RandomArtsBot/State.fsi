@@ -1,30 +1,33 @@
 ﻿namespace RandomArtsBot
 
 open System
-open RandomArt
-open Twitter
 
-module State =
-    type Speaker = 
-        | Us | Them
+type Speaker = 
+    | Us | Them
 
+type IState =
     /// returns the converstions with this recipient so far
-    val getConvo : string -> Async<seq<DateTime * Speaker * string>>
+    abstract member GetConvo : string -> Async<seq<DateTime * Speaker * string>>
 
     /// add lines to an ongoing conversation with a recipient
-    val addConvo : string -> seq<DateTime * Speaker * string> -> Async<unit>
+    abstract member AddConvo : string * seq<DateTime * Speaker * string> -> Async<unit>
 
     /// returns the ID of the last DM that had been processed
-    val lastMessage : string -> Async<Id option>
+    abstract member LastMessage : string -> Async<Id option>
 
     /// updates the ID of the last DM that had been processed
-    val updateLastMessage : string -> Id -> Async<unit>
+    abstract member UpdateLastMessage : string * Id -> Async<unit>
 
     /// returns the ID of the last mention that had been processed
-    val lastMention : string -> Async<Id option>
+    abstract member LastMention : string -> Async<Id option>
 
     /// updates the ID of the last mention that had been processed
-    val updateLastMention : string -> Id -> Async<unit>
+    abstract member UpdateLastMention : string * Id -> Async<unit>
 
     /// atomically save an expr
-    val atomicSave : Expr -> Async<bool>
+    abstract member AtomicSave : Expr -> Async<bool>
+
+type State =
+    new : unit -> State
+
+    interface IState

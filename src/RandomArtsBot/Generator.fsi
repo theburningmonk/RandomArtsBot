@@ -1,5 +1,10 @@
 ﻿namespace RandomArtsBot
 
-module Generator =
+type IGenerator =
     /// Starts a loop to generate random images periodically
-    val start : freqMs:int -> unit
+    abstract member Start : freqMs:int -> unit
+
+type Generator =
+    new : ITwitterClient * IArtist * IState -> Generator
+
+    interface IGenerator

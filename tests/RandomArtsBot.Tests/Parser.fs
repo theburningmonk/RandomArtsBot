@@ -4,7 +4,7 @@ open FsUnit
 open NUnit.Framework
 open FsCheck
 
-open RandomArtsBot.RandomArt
+open RandomArtsBot
 
 module Option =
     let ofChoice = function
@@ -12,12 +12,14 @@ module Option =
         | _ -> None
 
 module ``Parser tests`` =
+    let artist = new Artist() :> IArtist
+
     [<Test>]
     let ``expressions generated from Expr should be parsed to the same Expr`` () = 
         let property (expr : Expr) =
             let expr' = 
                 expr.ToString() 
-                |> parse 
+                |> artist.Parse 
                 |> Option.ofChoice
             expr' = Some expr
 
