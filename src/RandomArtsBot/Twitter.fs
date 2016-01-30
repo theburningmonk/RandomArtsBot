@@ -180,8 +180,8 @@ module private Utilities =
 
     let imgurClientId     = appSettings.["imgurClientId"]
     let imgurClientSecret = appSettings.["imgurClientSecret"]
-    let imgurClient   = new ImgurClient(imgurClientId, imgurClientSecret);
-    let imgurEndpoint = new ImageEndpoint(imgurClient);
+    let imgurClient   = new ImgurClient(imgurClientId, imgurClientSecret)
+    let imgurEndpoint = new ImageEndpoint(imgurClient)
 
     let uploadImageToImgur (image : Bitmap) = async {
         use stream = new MemoryStream()
