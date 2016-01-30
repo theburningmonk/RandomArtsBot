@@ -1,2 +1,5 @@
+LinqToTwitter
 group Test
 FsUnit
+FsCheck
+Foq
