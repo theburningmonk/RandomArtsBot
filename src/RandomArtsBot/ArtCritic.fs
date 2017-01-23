@@ -64,4 +64,3 @@ module Critic =
         bitmap
         |> (isAlmostBlackScreen <||> isOneColour) 
         |> not
-

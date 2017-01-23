@@ -1,0 +1,14 @@
+{
+  "bindings": [
+    {
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "payload",
+      "authLevel": "function",
+      "methods": [
+        "get"
+      ]
+    }
+  ],
+  "disabled": false
+}
