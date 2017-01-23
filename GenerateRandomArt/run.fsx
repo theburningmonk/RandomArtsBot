@@ -10,9 +10,8 @@ open Newtonsoft.Json
 let Run(req: HttpRequestMessage, log: TraceWriter) =
   log.Info(sprintf "F# HTTP trigger function processed a request. ")
     
-  let result = JsonConvert.SerializeObject "fuck you"
-
-  req.CreateResponse(
-    HttpStatusCode.OK, 
-    result
-  )
+  let response = new HttpResponseMessage()
+  response.Content <- new StringContent("fuck you")
+  response.StatusCode <- HttpStatusCode.OK
+  
+  response

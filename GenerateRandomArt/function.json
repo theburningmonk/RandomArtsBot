@@ -4,11 +4,17 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "payload",
-      "authLevel": "function",
+      "authLevel": "anonymous",
       "methods": [
         "get"
       ]
+    },
+    {
+      "type": "http",
+      "name": "res",
+      "direction": "out"
     }
+
   ],
   "disabled": false
 }
